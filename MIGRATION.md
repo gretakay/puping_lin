@@ -131,3 +131,71 @@ Apps Script doPost(e)  ← ApiRouter.js
    - `GAS_EXEC_URL`：Apps Script Web App 部署後的 exec 網址
    - `API_SECRET`：跟 Apps Script Script Properties 裡同一組密鑰
 5. Deploy，拿到 Vercel 給的網址後即可實際測試（見上方「驗證清單」）
+
+### 執行結果（已完成）
+
+- GitHub：https://github.com/gretakay/puping_lin
+- Vercel：https://puping-lin.vercel.app
+- 實測 `/api/gas` 全路徑打通（Vercel → Apps Script `doPost` → 白名單 → 真實函式 → 回傳資料），白名單阻擋機制也驗證有效
+- 後端專用檔案（`ApiRouter.js`、`appsscript.json`、`.clasp.json` 等）在 Vercel 上都是 404，沒有被公開發布
+
+---
+
+## 踩過的雷與注意事項（下次做類似專案直接看這段）
+
+這次「前端搬 Vercel、後端留 Apps Script、混合放在同一個 repo」的過程中，實際踩到幾個坑，記下來下次可以直接避開，不用重新踩一次。
+
+### 1. `clasp push` 會把整個資料夾都當成 Apps Script 專案的一部分推上去
+
+只要資料夾裡有 `.js` 檔案，`clasp push` 預設就會推上去，**不會自動分辨這是不是 GAS 程式碼**。這次 `api/gas.js`（Vercel 的 Node serverless function，裡面用了 `module.exports`）就這樣被一起推上 Apps Script，因為 GAS 環境沒有 `module` 這個東西，直接讓**整個專案掛掉**——不是只有新加的 API 壞掉，連原本好好的 `doGet`（開頁功能）都一起噴 `ReferenceError`。
+
+原因是 Apps Script 專案裡所有檔案共用同一個全域作用域，只要有一個檔案在頂層（不是函式裡面，是檔案最外層）丟出錯誤，整個專案都執行不了。
+
+**下次怎麼做：** 混合 repo（前端 Vercel + 後端 GAS 放同一個資料夾）**一開始寫程式碼之前**就先建好 `.claspignore`，把不屬於 GAS 的東西（Node serverless functions、純前端 JS、`.md` 文件等）排除掉，不要等出事才補。跟 `.vercelignore` 剛好是相反的兩份清單，新增檔案時要想清楚它該不該被排除在某一邊。
+
+### 2. 改了 `.claspignore` 之後，`clasp push` 可能顯示「已經是最新」但其實沒有真的清掉舊檔案
+
+第一次沒有 `.claspignore` 就 push 過一次之後，就算後來補上 `.claspignore` 把某些檔案排除，直接再下一次 `clasp push` 有可能顯示 `Script is already up to date`，完全沒有動作——遠端那個壞掉的檔案還在，不會因為本機不再追蹤它就自動被清掉。
+
+**下次怎麼做：** 改了 ignore 規則之後，順手在某一個「還會被追蹤」的檔案裡加一行小改動（哪怕只是一行註解），逼 `clasp push` 偵測到真正的內容差異、觸發一次完整推送，才能讓被排除的檔案真的從遠端消失。之後可以再把那行小改動拿掉或留著都沒差。
+
+### 3. Apps Script 的「部署」是釘住版本號的，`clasp push` 不會自動讓已發布的部署更新
+
+`clasp push` 只會更新專案的 HEAD（最新程式碼），但正在給別人用的那個「部署」（Deployment）是釘住某個版本號的快照，不會自動跟著更新。這次線上在用的部署明明 HEAD 都修好了，網址還是照樣噴同一個錯誤，因為那個部署還停在舊版本。
+
+**下次怎麼做：** 改完後端程式碼要生效，兩步都要做：
+```
+clasp push                          # 更新 HEAD 程式碼
+clasp deploy -i <deploymentId>      # 把「正在使用中」的那個部署更新到新版本
+```
+`<deploymentId>` 用 `clasp deployments` 查，**不要用猜的**去組 `/exec` 網址——`clasp deployments` 列出的項目不一定每個都是「網頁應用程式」類型，猜錯會得到很難懂的 Google Drive 錯誤頁面，反而更難判斷問題出在哪。最準的做法是直接到 Apps Script 編輯器「管理部署作業」頁面複製官方顯示的網址。
+
+### 4. 剛部署完馬上測試，可能還會看到舊的錯誤（邊緣快取延遲）
+
+`clasp deploy` 完馬上用 curl／瀏覽器打 exec 網址，有時候還是會看到修改前的結果，等個幾十秒到一分鐘左右重試就正常了。看到「怎麼還是壞的」不用急著懷疑是不是哪個步驟做錯，先等一下再測一次。
+
+### 5. 測試 `doPost` 不要用 `curl -L --post302 --post303` 硬保留 POST
+
+Apps Script Web App 對 POST 請求的實際運作方式是：先在 `/exec` 執行完 `doPost`、把結果算好，然後用 302 轉址到 `script.googleusercontent.com/macros/echo?...` 這個網址，而**這個轉址目標只接受 GET**，用意是去把「已經算好的結果」取回來，不是要你把同一個 POST 再打一次。
+
+如果手動用 curl 測試，用預設轉址行為就好（POST 打第一段、轉址時讓它自動變成 GET），不要加 `--post302`/`--post303` 硬要保留 POST 方法，否則會拿到 `405`、`411` 之類看起來莫名其妙的錯誤，浪費時間排查。如果是透過瀏覽器 `fetch` 或 Node 內建 `fetch`（`redirect: 'follow'`），這件事完全不用自己處理，兩者都是照 WHATWG fetch 規範自動做對的，這也是為什麼最後改成直接測真正會用到的 `/api/gas` 反而一次就成功。
+
+### 6. GAS 其實本來就會自動加 CORS 標頭
+
+debug 過程中意外發現，就連 `doPost` 的 302 轉址回應都帶了 `Access-Control-Allow-Origin: *`。這印證了「瀏覽器直接連 Apps Script」技術上其實可行，這次選 Vercel Proxy 主要是為了把密鑰藏起來、不依賴這個平台細節，而不是因為直連完全行不通。
+
+### 7. 用文字搜尋工具盤點呼叫點時，留意某些檔案可能被誤判成二進位檔而跳過
+
+第一輪找 `google.script.run` 呼叫點時，`stocktake-correction.html` 因為檔案裡有某個特殊字元，被 ripgrep 判定成二進位檔，整個檔案的搜尋結果直接消失，害第一輪盤點漏了一整個檔案（9 個頁面漏成 8 個）。後來是刻意重新用強制文字模式（`grep -a`）全部檔案重新掃一次、並寫程式交叉比對「白名單函式 ⟷ 實際呼叫」兩個方向都要對上，才抓出這個遺漏。
+
+**下次怎麼做：** 盤點呼叫點這種「一個都不能漏」的工作，不要只信任單一次搜尋結果——用兩種方式（例如一般搜尋 + 強制文字模式搜尋）互相對照，或事後寫個小腳本雙向交叉比對數量，才保險。
+
+### 8. 部署設定檢查清單（下次可以直接照著走）
+
+1. `clasp push` 前先確認 `.claspignore` 排除了所有非 GAS 檔案（`clasp status` 看 Tracked files 對不對，不該出現前端/Node 專用檔）
+2. `clasp deployments` 確認「正在使用中」的部署 ID
+3. `clasp push` → `clasp deploy -i <id>`
+4. 先用瀏覽器手動開 exec 網址，確認 `doGet` 沒有噴錯（最快的整體健康檢查，比直接測 `doPost` 更快抓到「整個專案掛掉」這種問題）
+5. 再測 `doPost`，但要透過真正會用到的呼叫路徑（例如 Vercel proxy 或瀏覽器 fetch），不要自己用 curl 硬組轉址邏輯
+6. Vercel 環境變數（`GAS_EXEC_URL`、`API_SECRET`）跟 Apps Script Script Properties 的 `API_SECRET` 要完全一致
+7. 確認 `.vercelignore` 有把後端檔案排除（用 curl 打 Vercel 網址 + 後端檔名，應該回 404）
