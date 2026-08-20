@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>🔙 資產歸還處理</title>
+  <style>
+    :root { --primary: #e67e22; --bg: #f8fafc; --accent: #1d4ed8; --success: #059669; --border: #cbd5e0; }
+    body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; padding: 98px 15px 120px; max-width: 950px; margin: auto; background-color: var(--bg); color: #333; line-height: 1.6; }
+    
+    .main-container { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+    h1 { color: var(--primary); text-align: center; font-weight: 800; font-size: 1.6rem; margin-bottom: 20px; }
+
+    .search-box { width: 100%; padding: 18px; border: 2px solid #fbd38d; border-radius: 14px; font-size: 17px; font-weight: 900; background: #fffaf0; margin-bottom: 20px; outline: none; transition: 0.3s; box-sizing: border-box; }
+
+    .checkbox-group { border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; background: white; min-height: 200px; }
+    .group-item { border-bottom: 2px solid #f1f5f9; }
+    .group-header { display: flex; align-items: center; padding: 20px; cursor: pointer; transition: 0.2s; position: relative; }
+    .group-header:hover { background: #fffaf5; }
+    .group-header.selected { background: #f0f7ff; border-left: 5px solid var(--accent); }
+
+    .asset-thumb { width: 65px; height: 65px; border-radius: 12px; object-fit: cover; margin: 0 15px; background: #f1f5f9; border: 1px solid #eee; flex-shrink: 0; }
+    .asset-info { flex-grow: 1; }
+    
+    .receiver-name { font-size: 1.3rem; color: var(--accent); font-weight: 900; display: block; margin-bottom: 2px; }
+    .asset-name { font-size: 1.1rem; color: #1a202c; font-weight: 800; }
+    .meta-date { font-size: 0.9rem; color: #64748b; font-weight: 700; margin-top: 4px; display: block; }
+
+    .detail-list { display: none; background: #f8fafc; border-top: 1px dashed #cbd5e0; padding: 5px 0; }
+    .detail-row { display: flex; align-items: center; padding: 15px 25px; border-bottom: 1px solid #edf2f7; }
+    .detail-col-id { flex: 1; font-weight: 900; color: var(--primary); font-size: 1.1rem; }
+    .loc-tag { cursor: pointer; color: #1d4ed8; background: #dbeafe; padding: 3px 10px; border-radius: 8px; font-weight: 800; text-decoration: none; border: 1px solid #bfdbfe; font-size: 0.9rem; display: inline-block; }
+
+    /* 🚀 分頁控制項樣式 */
+    .pagination-ctrl { display: flex; justify-content: center; align-items: center; gap: 15px; margin: 20px 0; padding-top: 10px; }
+    .btn-page { padding: 10px 20px; border-radius: 10px; border: 1.5px solid #cbd5e0; background: white; font-weight: 800; cursor: pointer; transition: 0.2s; }
+    .btn-page:hover:not(:disabled) { background: #f1f5f9; border-color: var(--accent); color: var(--accent); }
+    .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+    #pageDisplay { font-weight: 900; color: #475569; font-size: 1.1rem; }
+
+    .map-wrapper { position: relative; width: 100%; background: #f1f5f9; border-radius: 12px; overflow: hidden; border: 2px solid #cbd5e0; margin: 10px 0; }
+    #mapImg { width: 100%; height: auto; display: block; }
+    #mapHighlight { position: absolute; border: 4px solid #FF3D00; background: rgba(255, 235, 59, 0.45); display: none; pointer-events: none; box-shadow: 0 0 15px rgba(255, 61, 0, 0.6); z-index: 10; transition: all 0.3s; }
+
+    .status-panel { background: #fff5f5; padding: 25px; border-radius: 18px; margin-top: 30px; border: 2px solid #feb2b2; }
+    .status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .input-group label { font-weight: 900; color: #4a5568; font-size: 0.95rem; display: block; margin-bottom: 8px; }
+    .input-group select, .input-group input { padding: 15px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 16px; font-weight: 800; background: white; width: 100%; box-sizing: border-box; scroll-margin-bottom: 180px; }
+    .group-cb, .item-cb { scroll-margin-bottom: 220px; }
+    @media (max-width: 800px) { .status-grid { grid-template-columns: 1fr; } }
+
+    button#submit-btn { width: 100%; padding: 22px; background: linear-gradient(135deg, #ff9800, #e67e22); color: white; border: none; border-radius: 16px; font-size: 1.3rem; font-weight: 900; margin-top: 30px; box-shadow: 0 8px 25px rgba(230, 126, 34, 0.3); transition: 0.3s; cursor: pointer; }
+    .btn-success { background: var(--success) !important; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+    .action-dock {
+      position: fixed;
+      left: 50%;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+      transform: translateX(-50%);
+      width: min(calc(100% - 24px), 950px);
+      padding: 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid rgba(226,232,240,0.95);
+      box-shadow: 0 10px 30px rgba(15,23,42,0.12);
+      backdrop-filter: blur(8px);
+      z-index: 2800;
+      box-sizing: border-box;
+    }
+    .action-dock #submit-btn { margin-top: 0; }
+
+    #confirmModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.75); z-index: 3200; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(4px); box-sizing: border-box; }
+    .confirm-card { background: #fff; width: min(100%, 520px); border-radius: 18px; padding: 20px; border: 1px solid #e2e8f0; box-shadow: 0 24px 48px rgba(2,6,23,0.2); }
+    .confirm-title { font-size: 1.25rem; font-weight: 900; color: #1e293b; margin-bottom: 12px; }
+    .confirm-list { display: grid; gap: 10px; }
+    .confirm-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 800; }
+    .confirm-item .label { color: #334155; }
+    .confirm-item .val { color: #0f172a; text-align: right; max-width: 68%; white-space: normal; word-break: break-word; line-height: 1.35; }
+    .ok { color: #059669 !important; }
+    .bad { color: #dc2626 !important; }
+    .confirm-actions { display: flex; gap: 16px; margin-top: 20px; }
+    .confirm-actions button {
+      flex: 1;
+      margin-top: 0;
+      padding: 18px 12px;
+      font-size: 1.02rem;
+      border-radius: 18px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      border: 1px solid transparent;
+      transition: 0.2s;
+    }
+    .confirm-actions button:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn-cancel {
+      background: #e2e8f0 !important;
+      color: #334155 !important;
+      border-color: #cbd5e1 !important;
+      box-shadow: 0 8px 20px rgba(148, 163, 184, 0.35) !important;
+    }
+    .btn-go {
+      background: linear-gradient(135deg, #2f8f3c, #2e7d32) !important;
+      color: white !important;
+      box-shadow: 0 10px 24px rgba(46, 125, 50, 0.35) !important;
+    }
+    .btn-go:disabled {
+      background: #cbd5e0 !important;
+      color: #64748b !important;
+      box-shadow: none !important;
+      cursor: not-allowed !important;
+      transform: none !important;
+    }
+
+    #mapModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); z-index: 3000; align-items: center; justify-content: center; padding: 15px; backdrop-filter: blur(5px); flex-direction: column; }
+    .modal-content { background: white; width: 100%; max-width: 500px; padding: 20px; border-radius: 24px; text-align: center; }
+
+    .top-dock {
+      position: fixed;
+      left: 50%;
+      top: 10px;
+      transform: translateX(-50%);
+      width: min(calc(100% - 24px), 950px);
+      padding: 8px 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid rgba(203,213,224,0.95);
+      box-shadow: 0 10px 26px rgba(15,23,42,0.1);
+      backdrop-filter: blur(8px);
+      z-index: 900;
+      box-sizing: border-box;
+    }
+    .top-nav { display: flex; gap: 8px; flex-wrap: wrap; overflow-x: visible; justify-content: center; align-items: center; width: 100%; box-sizing: border-box; margin: 0; padding: 0; }
+    .top-nav::-webkit-scrollbar { display: none; }
+    .top-nav a { flex: 0 0 auto; white-space: nowrap; text-align: center; text-decoration: none; color: #334155; background: #e2e8f0; border: 1px solid #cbd5e1; padding: 7px 12px; border-radius: 999px; font-weight: 800; font-size: 13px; }
+    .top-nav a.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+    .page-tip { margin: -6px 0 16px; padding: 10px 12px; border-radius: 12px; background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; font-size: 0.88rem; font-weight: 700; }
+
+    .loader { border: 4px solid #f3f3f3; border-top: 4px solid white; border-radius: 50%; width: 28px; height: 28px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 15px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    .toast {
+      position: fixed;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-8px);
+      min-width: 260px;
+      max-width: min(92vw, 520px);
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #0f172a;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+      z-index: 4000;
+      opacity: 0;
+      pointer-events: none;
+      transition: 0.2s ease;
+      font-weight: 800;
+      box-sizing: border-box;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.warn { border-color: #f59e0b; background: #fffbeb; color: #92400e; }
+    .toast.error { border-color: #ef4444; background: #fef2f2; color: #991b1b; }
+    .toast.success { border-color: #10b981; background: #ecfdf5; color: #065f46; }
+
+    @media (max-width: 600px) {
+      body { padding: 104px 12px 132px; max-width: 100%; }
+      .main-container { padding: 16px; }
+      .group-header { padding: 14px; }
+      .detail-row { padding: 12px 14px; }
+      .page-tip { font-size: 0.82rem; margin-bottom: 12px; }
+      .top-dock { width: calc(100% - 24px); }
+      .action-dock { width: calc(100% - 24px); }
+      .confirm-actions { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top-dock">
+    <div id="topNav" class="top-nav"></div>
+  </div>
+  <div class="page-tip">勾選要歸還的項目後送出，系統會自動更新清單；若更新失敗，會直接提示你重新整理。</div>
+
+  <div class="main-container">
+    <h1><span>🔙</span> 資產歸還處理系統</h1>
+    <form id="return-form" novalidate>
+      <div id="formContent">
+        <input type="text" id="returnSearch" class="search-box" placeholder="🔍 搜尋借用人、品名、編號..." oninput="filterReturnList()">
+        
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px; font-weight:900;">
+          <div>符合：<span id="resCount" style="color:var(--primary)">0</span> ｜ 已選：<span id="selectedCount" style="color:var(--accent)">0</span></div>
+          <div style="display:flex; gap:10px;">
+            <button type="button" onclick="toggleAllFiltered(true)" style="padding:6px 12px; border-radius:10px; border:1.5px solid #ccc; background:white; font-weight:800; cursor:pointer;">全選</button>
+            <button type="button" onclick="toggleAll(false)" style="padding:6px 12px; border-radius:10px; border:1.5px solid #ccc; background:white; font-weight:800; cursor:pointer;">清除</button>
+          </div>
+        </div>
+
+        <div id="assetList" class="checkbox-group">
+          <div style="text-align:center; padding:60px; color:#94a3b8; font-weight:800;">⌛ 正在讀取雲端借出紀錄...</div>
+        </div>
+
+        <div class="pagination-ctrl">
+          <button type="button" class="btn-page" id="prevBtn" onclick="changePage(-1)">◀ 上一頁</button>
+          <span id="pageDisplay">第 1 / 1 頁</span>
+          <button type="button" class="btn-page" id="nextBtn" onclick="changePage(1)">下一頁 ▶</button>
+        </div>
+
+        <div class="status-panel">
+          <div class="panel-title" style="font-weight:900; color:#c53030; margin-bottom:15px; font-size:1.2rem;">🚨 歸還確認</div>
+          <div class="status-grid">
+            <div class="input-group"><label>1. 變更狀態</label><select id="targetStatus"><option value="在庫">✅ 正常歸還</option><option value="已使用完">🧴 已使用完</option><option value="毀損報廢">❌ 毀損報廢</option><option value="遺失扣除">❓ 物品遺失</option><option value="待維修">🛠️ 待維修</option></select></div>
+            <div class="input-group"><label>2. 點收經手人</label><input type="text" id="handlerInput" required placeholder="您的姓名"></div>
+            <div class="input-group"><label>3. 狀況說明</label><input type="text" id="noteInput" placeholder="選填"></div>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="action-dock">
+    <button type="submit" form="return-form" id="submit-btn">確認提交並更新庫存</button>
+  </div>
+
+  <div id="confirmModal">
+    <div class="confirm-card">
+      <div class="confirm-title">送出前檢查</div>
+      <div class="confirm-list">
+        <div class="confirm-item"><span class="label">選擇物品與數量 (必填)</span><span class="val" id="checkItems"></span></div>
+        <div class="confirm-item"><span class="label">變更狀態</span><span class="val" id="checkStatus"></span></div>
+        <div class="confirm-item"><span class="label">點收人</span><span class="val" id="checkHandler"></span></div>
+      </div>
+      <div class="confirm-actions">
+        <button type="button" class="btn-cancel" onclick="closeConfirmModal()">❌ 取消修改</button>
+        <button type="button" class="btn-go" id="confirmGoBtn" onclick="submitReturn()">✅ 確認送出</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <div id="mapModal" onclick="this.style.display='none'">
+    <div class="modal-content">
+      <h3 id="mapTitle" style="margin-top:0; color:#1e293b;">📍 歸還位置引導</h3>
+      <div id="loadingText" style="font-size: 13px; color: #64748b; margin-bottom: 8px;">正在顯示圖片標記區域...</div>
+      <div class="map-wrapper">
+        <img id="mapImg" src="" />
+        <div id="mapHighlight"></div>
+      </div>
+      <button onclick="document.getElementById('mapModal').style.display='none'" style="width:100%; margin-top:15px; padding:12px; background:#475569; color:white; border:none; border-radius:12px; font-weight:900; cursor:pointer;">關閉地圖</button>
+    </div>
+  </div>
+
+  <script src="./gas-polyfill.js"></script>
+  <script>
+    let allBorrowedAssets = [];
+    let filteredGroups = []; // 🚀 存放過濾後的分組資料
+    let detailsCache = {}; // 延遲渲染時的群組內容快取
+    let ROOM_DATA = {}; 
+    let FLOOR_MAPS = {}; 
+    let currentPageIndex = 1;
+    const itemsPerPage = 10; // 🚀 設定每頁 10 筆
+
+    const currentUrlParams = new URLSearchParams(window.location.search);
+    const currentPage = currentUrlParams.get('page') || 'asset_return'; 
+    
+    function getDirectUrl(url) {
+      if (!url) return "";
+      let src = String(url).trim();
+      if (src.indexOf("drive.google.com") > -1) {
+        const match = src.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        const match2 = src.match(/id=([a-zA-Z0-9_-]+)/);
+        const fileId = (match && match[1]) ? match[1] : ((match2 && match2[1]) ? match2[1] : null);
+        if (fileId) {
+          // 使用縮圖 API 並要求大尺寸
+          return "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w4000";
+        }
+      }
+      return src; 
+    }
+
+    function getThumbUrl(url, size) {
+      if (!url) return "";
+      const src = String(url).trim();
+      const sz = Number(size) || 240;
+
+      if (src.indexOf("drive.google.com") > -1) {
+        const match = src.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        const match2 = src.match(/id=([a-zA-Z0-9_-]+)/);
+        const fileId = (match && match[1]) ? match[1] : ((match2 && match2[1]) ? match2[1] : null);
+        if (fileId) return "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w" + sz;
+      }
+
+      if (src.indexOf("lh3.googleusercontent.com/d/") > -1) {
+        return src + "=s" + sz;
+      }
+
+      return src;
+    }
+
+    function initLocation() {
+      google.script.run.withSuccessHandler(res => {
+        ROOM_DATA = res.roomData;
+        FLOOR_MAPS = res.floorMaps;
+      }).getLocationData();
+    }
+    
+    // 小工具：安全擷取錯誤訊息
+    function getErrMsg(err) {
+      try {
+        if (!err) return '未知錯誤';
+        if (typeof err === 'string') return err;
+        if (err.message) return err.message;
+        if (err.toString) return err.toString();
+        return JSON.stringify(err);
+      } catch (e) { return '未知錯誤'; }
+    }
+
+    // LOG wrapper
+    window.DEBUG = window.DEBUG || false;
+    const LOG = { debug: (...a) => { if (window.DEBUG) console.log(...a); }, info: (...a) => { if (window.DEBUG) console.info(...a); }, error: (...a) => console.error(...a) };
+
+    let toastTimer = null;
+    function showToast(message, type) {
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.className = 'toast ' + (type || 'warn');
+      toast.textContent = message || '';
+      if (toastTimer) clearTimeout(toastTimer);
+      requestAnimationFrame(() => { toast.classList.add('show'); });
+      toastTimer = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2600);
+    }
+
+    function focusToField(el) {
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => {
+        try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+      }, 120);
+    }
+
+    function focusAndReportValidity(el, message) {
+      if (!el) return;
+      const clearCustomValidity = function() {
+        el.setCustomValidity('');
+        el.removeEventListener('input', clearCustomValidity);
+        el.removeEventListener('change', clearCustomValidity);
+      };
+      el.setCustomValidity(message || '');
+      focusToField(el);
+      el.reportValidity();
+      el.addEventListener('input', clearCustomValidity);
+      el.addEventListener('change', clearCustomValidity);
+    }
+
+    function showItemSelectionWarning(message) {
+      const itemAnchor = document.querySelector('.sub-cb, .group-cb') || document.getElementById('returnSearch');
+      focusAndReportValidity(itemAnchor, message || '請先勾選要歸還的物品（必填）');
+    }
+
+    function load(onDone) {
+      const container = document.getElementById('assetList');
+      container.innerHTML = '<div style="text-align:center; padding:60px; color:#94a3b8; font-weight:900;"><div class="loader"></div> 正在聚合所有位置表的借出紀錄...<br><small style="color:#cbd5e0; font-weight:normal; margin-top:8px; display:block;">首次載入約需 3-5 秒，後續會快取加速</small></div>';
+      const startTime = Date.now();
+      // give browser a moment to render spinner
+      setTimeout(() => {
+        google.script.run
+          .withSuccessHandler(assets => { 
+            allBorrowedAssets = assets || []; 
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            LOG.debug(`✅ 借出資料載入完成，耗時 ${elapsed} 秒`);
+            filterReturnList();
+            if (typeof onDone === 'function') onDone(true, assets || []);
+          })
+          .withFailureHandler(err => {
+            container.innerHTML = '<div style="text-align:center; padding:60px; color:#ef4444; font-weight:900;">載入失敗：' + getErrMsg(err) + '<br><small style="margin-top:10px; display:block;">請重新整理頁面或聯繫管理員</small></div>';
+            if (typeof onDone === 'function') onDone(false, err);
+          })
+          .getBorrowedAssets();
+      }, 50);
+    }
+    
+    function filterReturnList() {
+    const keyword = document.getElementById('returnSearch').value.trim().toLowerCase();
+  
+    // 🚀 修正：使用 String() 包裹欄位，並加入位置搜尋以支援多位置表查詢
+    // getBorrowedAssets 已聚合所有位置表的借出資產
+    const filteredItems = allBorrowedAssets.filter(a => 
+    (String(a.name || "").toLowerCase().includes(keyword)) || 
+    (String(a.id || "").toLowerCase().includes(keyword)) || 
+    (String(a.receiver || "").toLowerCase().includes(keyword)) ||
+    (String(a.location || "").toLowerCase().includes(keyword)) // 支援按位置搜尋
+    );
+
+    // 以下分組邏輯保持不變
+    const groups = {};
+    filteredItems.forEach(item => {
+    const key = `${item.receiver}|${item.borrowDate}|${item.name}`;
+    if (!groups[key]) {
+      groups[key] = { 
+        name: item.name, 
+        receiver: item.receiver, 
+        date: item.borrowDate, 
+        img: item.photoUrl, 
+        items: [],
+        totalCount: 0
+      };
+    }
+           groups[key].items.push(item);
+    // accumulate count (support batch count field)
+    groups[key].totalCount += Number(item.count) || 1;
+    });
+
+    filteredGroups = Object.values(groups);
+    document.getElementById('resCount').textContent = filteredItems.length;
+  
+    currentPageIndex = 1; 
+    renderPaginatedList(); 
+    }
+
+function renderPaginatedList() {
+  const container = document.getElementById('assetList');
+  container.innerHTML = '';
+
+  if (filteredGroups.length === 0) {
+    container.innerHTML = '<div style="text-align:center; padding:50px; color:#94a3b8; font-weight:900;">目前無相關借出紀錄</div>';
+    updatePagination(0);
+    return;
+  }
+
+  const totalPages = Math.ceil(filteredGroups.length / itemsPerPage);
+  const start = (currentPageIndex - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  const pageData = filteredGroups.slice(start, end);
+
+  pageData.forEach((g, idx) => {
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'group-item';
+    const groupId = `group-${start + idx}`;
+
+    let imgSrc = "";
+    const rawImg = String(g.img || (g.items && g.items[0] && g.items[0].photoUrl) || "");
+    // 排除無效的照片（無照片、空字符串等），只接受有效的 URL
+    if (rawImg && rawImg !== "無照片" && (rawImg.startsWith("data:image") || rawImg.startsWith("http"))) {
+      imgSrc = rawImg;
+    }
+
+    const imgHtml = imgSrc ? 
+      `<img src="${getThumbUrl(imgSrc, 240)}" class="asset-thumb" loading="lazy" decoding="async" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">` +
+      `<div class="asset-thumb" style="display:none; align-items:center; justify-content:center; color:#cbd5e0; font-size:28px;">📦</div>` : 
+      `<div class="asset-thumb" style="display:flex; align-items:center; justify-content:center; color:#cbd5e0; font-size:28px;">📦</div>`;
+    
+    groupDiv.innerHTML = `
+      <div class="group-header" onclick="toggleDetails('${groupId}')">
+        <input type="checkbox" class="group-cb sub-parent" id="cb-${groupId}" onchange="syncGroup(this, '${groupId}')" onclick="event.stopPropagation()" style="width:24px; height:24px;">
+        ${imgHtml}
+        <div class="asset-info">
+          <span class="receiver-name">👤 ${g.receiver}</span>
+          <span class="asset-name">${g.name} (${g.totalCount}件)</span>
+          <span class="meta-date">📅 借出日：${g.date}</span>
+        </div>
+        <span style="color:#a0aec0;font-size:12px;font-weight:900;border:1.5px solid #eee;padding:4px 8px;border-radius:6px;white-space:nowrap;">展開明細</span>
+      </div>
+      <div class="detail-list" id="${groupId}" data-loaded="false"></div>
+    `;
+    // 將明細暫存於 client 端快取，實際 HTML 延後在展開時渲染
+    detailsCache[groupId] = g.items;
+    container.appendChild(groupDiv);
+  });
+
+  updatePagination(totalPages);
+  updateCount();
+}
+
+    function updatePagination(totalPages) {
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const display = document.getElementById('pageDisplay');
+
+      if (totalPages <= 1) {
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+        display.textContent = `第 1 / 1 頁`;
+      } else {
+        prevBtn.disabled = (currentPageIndex === 1);
+        nextBtn.disabled = (currentPageIndex === totalPages);
+        display.textContent = `第 ${currentPageIndex} / ${totalPages} 頁`;
+      }
+    }
+
+    function changePage(step) {
+      currentPageIndex += step;
+      renderPaginatedList();
+      // 切換分頁後自動捲回頂端
+      document.querySelector('.checkbox-group').scrollIntoView({ behavior: 'smooth' });
+    }
+
+  function showMap(url, name) {
+  // 兼容性處理：如果只傳了一個參數(舊邏輯)，就把第一個參數當作 name，url 當空
+  if (name === undefined) { 
+    name = url; 
+    url = ""; 
+  }
+
+  // 防呆
+  if ((!url || url === 'undefined') && (!name || name === 'undefined')) return;
+
+  const img = document.getElementById('mapImg');
+  const highlight = document.getElementById('mapHighlight');
+  const loadingText = document.getElementById('loadingText');
+  const modal = document.getElementById('mapModal');
+  const title = document.getElementById('mapTitle');
+
+  // 1. 初始化介面
+  highlight.style.display = 'none'; 
+  modal.style.display = 'flex';
+  title.innerText = "📍 區域：" + (name || "未知");
+  loadingText.innerText = "地圖讀取中...";
+  img.referrerPolicy = "no-referrer"; 
+
+  // 2. 嘗試取得座標資料 (為了畫紅框)
+  // 即使有網址，我們還是要拿 name 去查 ROOM_DATA，不然不知道紅框畫哪裡
+  let room = null;
+  if (name && typeof ROOM_DATA !== 'undefined') {
+     const cleanName = String(name).trim();
+     room = ROOM_DATA[cleanName];
+     
+     // 模糊搜尋 (例如：找不到 1F-A03照客，就改找 1F-A區)
+     if (!room) {
+        const match = cleanName.match(/^([A-Z0-9]+-[A-Z])/i); 
+        if (match) {
+           const broadKey = match[1] + "區";
+           room = ROOM_DATA[broadKey];
+           if(room) console.log("💡 自動對應座標至：" + broadKey);
+        }
+     }
+  }
+
+  // 3. 決定最終圖片網址
+  let finalUrl = "";
+  
+  if (url && String(url).startsWith('http')) {
+      // A. 有後端網址 -> 轉成 thumbnail 格式使用
+      console.log("=== 使用後端圖片連結 ===");
+      finalUrl = getDirectUrl(url);
+  } else if (room) {
+      // B. 沒網址但有座標 -> 用座標表裡的連結
+      console.log("=== 使用查表圖片連結 ===");
+      let rawUrl = room.specificUrl || (FLOOR_MAPS ? FLOOR_MAPS[room.floor] : "");
+      finalUrl = getDirectUrl(rawUrl);
+  }
+
+  // 如果最後還是沒網址，就報錯
+  if (!finalUrl) {
+    showToast(`❌ 找不到「${name}」的地圖圖片。`, 'error');
+     modal.style.display = 'none';
+     return;
+  }
+
+  // 4. 載入圖片並繪製紅框
+  img.onload = function() {
+    console.log("✅ 圖片載入成功！");
+    loadingText.innerText = ""; 
+    
+    // 🚀 關鍵：如果有查到 room (座標)，就顯示紅框
+    if (room) {
+        highlight.style.left = room.x + "%"; 
+        highlight.style.top = room.y + "%";
+        highlight.style.width = room.w + "%"; 
+        highlight.style.height = room.h + "%";
+        highlight.style.display = "block"; // 💡 燈亮了！
+    } else {
+        highlight.style.display = "none"; // 只有圖，沒座標
+    }
+  };
+
+  img.onerror = function() {
+     loadingText.innerHTML = `❌ <b>載入失敗</b><br>請確認連結權限`;
+  };
+
+  img.src = finalUrl; 
+}
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function renderGroupDetails(groupId) {
+      const container = document.getElementById(groupId);
+      if (!container) return;
+      if (container.getAttribute('data-loaded') === 'true') return;
+      const items = detailsCache[groupId] || [];
+      container.innerHTML = items.map(item => `
+        <div class="detail-row">
+          <input type="checkbox" name="assetIds" value="${item.id}" data-item-name="${escapeHtml(item.name)}" data-count="${Number(item.count)||1}" data-qty-input="qty-${groupId}-${item.id}" class="item-cb sub-cb" data-parent="cb-${groupId}" onchange="onItemChecked(this);updateCount()" style="width:22px; height:22px; margin-right:15px;">
+          <div class="detail-col-id">編號：${item.id}${Number(item.count) && Number(item.count) > 1 ? ' <small style="color:#64748b;">(批次共 '+Number(item.count)+' 本)</small>' : ''}</div>
+          <div class="detail-col-loc">
+            <span class="loc-tag" data-map-url="${encodeURIComponent(String(item.mapUrl || ''))}" data-location="${encodeURIComponent(String(item.location || ''))}" onclick="showMap(decodeURIComponent(this.dataset.mapUrl || ''), decodeURIComponent(this.dataset.location || ''))">${escapeHtml(item.location)} (圖解)</span>
+          </div>
+          ${Number(item.count) && Number(item.count) > 1 ? `<div style="margin-left:auto; display:flex; gap:8px; align-items:center;"><label style="font-weight:900; color:#475569;">歸還數</label><input id="qty-${groupId}-${item.id}" type="number" min="1" max="${Number(item.count)}" value="1" style="width:80px; padding:6px; border:1px solid #e2e8f0; border-radius:8px; font-weight:900;" onchange="onQtyChange('${groupId}','${item.id}')"></div>` : ''}
+        </div>
+      `).join('');
+      container.setAttribute('data-loaded','true');
+    }
+
+    function toggleDetails(id) { const el = document.getElementById(id); if (!el) return; if (el.style.display === 'block') { el.style.display = 'none'; } else { renderGroupDetails(id); el.style.display = 'block'; } }
+    function syncGroup(cb, groupId) {
+      const groupEl = document.getElementById(groupId);
+      if (!groupEl) return;
+      // 主項勾選時，先確保明細已渲染，避免尚未展開時抓不到子項
+      if (groupEl.getAttribute('data-loaded') !== 'true') {
+        renderGroupDetails(groupId);
+      }
+      const subs = groupEl.querySelectorAll('.sub-cb');
+      subs.forEach(s => {
+        s.checked = cb.checked;
+        const qtyInputId = s.getAttribute('data-qty-input');
+        if (qtyInputId) {
+          const inp = document.getElementById(qtyInputId);
+          if (inp) {
+            if (cb.checked) {
+              const full = Number(s.getAttribute('data-count')) || 1;
+              inp.value = full;
+            } else {
+              inp.value = 1;
+            }
+          }
+        }
+      });
+      updateCount();
+    }
+    function updateCount() {
+      // Sum up selected quantities (supports linked qty inputs for batch items)
+      const checked = document.querySelectorAll('.sub-cb:checked');
+      let sum = 0;
+      checked.forEach(cb => {
+        const qtyInputId = cb.getAttribute('data-qty-input');
+        let qty = Number(cb.getAttribute('data-count')) || 1;
+        if (qtyInputId) {
+          const inp = document.getElementById(qtyInputId);
+          if (inp) qty = Number(inp.value) || qty;
+        }
+        sum += qty;
+      });
+      document.getElementById('selectedCount').textContent = sum;
+      document.querySelectorAll('.group-header').forEach(header => {
+        const cb = header.querySelector('.sub-parent');
+        if(!cb) return;
+        const checkedSubs = document.querySelectorAll(`[data-parent="${cb.id}"]:checked`);
+        header.classList.toggle('selected', checkedSubs.length > 0);
+      });
+    }
+
+    function onQtyChange(groupId, itemId) {
+      // If checkbox is checked, update total display immediately
+      const cb = document.querySelector(`.item-cb[value="${itemId}"]`);
+      if (cb && cb.checked) updateCount();
+    }
+
+    function onItemChecked(cb) {
+      if (!cb) return;
+      const qtyInputId = cb.getAttribute('data-qty-input');
+      const fullCount = Number(cb.getAttribute('data-count')) || 1;
+      const checkedAll = document.querySelectorAll('.sub-cb:checked');
+      if (cb.checked && checkedAll.length === 1 && qtyInputId) {
+        const inp = document.getElementById(qtyInputId);
+        if (inp) inp.value = fullCount;
+      }
+    }
+
+    function toggleAllFiltered(state) { 
+      // 先確保目前頁面的群組明細已渲染，避免初次全選時沒有 .item-cb 可勾選
+      document.querySelectorAll('.detail-list').forEach(el => {
+        if (el.getAttribute('data-loaded') !== 'true') {
+          renderGroupDetails(el.id);
+        }
+      });
+
+      // 勾选/取消勾选目前頁面所有群組與子項
+      document.querySelectorAll('.group-cb, .item-cb').forEach(cb => cb.checked = state);
+
+      if (state) {
+        // 全選時：批次項目預設歸還整批數量
+        document.querySelectorAll('.item-cb:checked[data-qty-input]').forEach(cb => {
+          const qtyInputId = cb.getAttribute('data-qty-input');
+          const fullCount = Number(cb.getAttribute('data-count')) || 1;
+          if (!qtyInputId) return;
+          const inp = document.getElementById(qtyInputId);
+          if (inp) inp.value = fullCount;
+        });
+      } else {
+        // 清除時：批次項目數量回到 1
+        document.querySelectorAll('.item-cb[data-qty-input]').forEach(cb => {
+          const qtyInputId = cb.getAttribute('data-qty-input');
+          if (!qtyInputId) return;
+          const inp = document.getElementById(qtyInputId);
+          if (inp) inp.value = 1;
+        });
+      }
+
+      updateCount();
+    }
+    function toggleAll(state) { document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = state); updateCount(); }
+
+    function safeRedirect(pageName) { window.top.location.href = pageName + '.html'; }
+
+    function closeConfirmModal() {
+      document.getElementById('confirmModal').style.display = 'none';
+    }
+
+    function renderCheckField(id, ok, text) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.className = 'val ' + (ok ? 'ok' : 'bad');
+      el.textContent = text;
+    }
+
+    function collectSubmitCheck() {
+      const checked = document.querySelectorAll('.sub-cb:checked');
+      const statusEl = document.getElementById('targetStatus');
+      const handler = String(document.getElementById('handlerInput').value || '').trim();
+      const statusText = statusEl && statusEl.options && statusEl.selectedIndex >= 0
+        ? String(statusEl.options[statusEl.selectedIndex].text || '').trim()
+        : '';
+
+      const hasItems = checked.length > 0;
+      const hasHandler = !!handler;
+      const itemSummary = Array.from(checked).map(cb => {
+        const qtyInputId = cb.getAttribute('data-qty-input');
+        let qty = Number(cb.getAttribute('data-count')) || 1;
+        if (qtyInputId) {
+          const inp = document.getElementById(qtyInputId);
+          if (inp) qty = Number(inp.value) || qty;
+        }
+        const name = String(cb.getAttribute('data-item-name') || cb.value || '').trim();
+        return `${name} x ${qty}`;
+      }).join('；');
+
+      return { hasItems, hasHandler, statusText, handler, itemSummary };
+    }
+
+    function buildSubmitCheck() {
+      const check = collectSubmitCheck();
+
+      renderCheckField('checkItems', check.hasItems, check.hasItems ? check.itemSummary : '未選擇');
+      renderCheckField('checkStatus', true, check.statusText ? `已選：${check.statusText}` : '未選擇');
+      renderCheckField('checkHandler', check.hasHandler, check.hasHandler ? `已填：${check.handler}` : '未填寫');
+
+      const allOk = check.hasItems && check.hasHandler;
+      const goBtn = document.getElementById('confirmGoBtn');
+      if (goBtn) goBtn.disabled = !allOk;
+      return allOk;
+    }
+
+    document.getElementById('return-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const check = collectSubmitCheck();
+      if (!check.hasItems) {
+        showItemSelectionWarning('請先勾選要歸還的物品（必填）');
+        return;
+      }
+      if (!check.hasHandler) {
+        const handlerEl = document.getElementById('handlerInput');
+        if (handlerEl) {
+          focusAndReportValidity(handlerEl, '請先填寫點收人（必填）');
+        }
+        return;
+      }
+      buildSubmitCheck();
+      document.getElementById('confirmModal').style.display = 'flex';
+    });
+
+    function submitReturn() {
+      const check = collectSubmitCheck();
+      if (!check.hasItems) {
+        showItemSelectionWarning('請先勾選要歸還的物品（必填）');
+        return;
+      }
+      if (!check.hasHandler) {
+        const handlerEl = document.getElementById('handlerInput');
+        if (handlerEl) {
+          focusAndReportValidity(handlerEl, '請先填寫點收人（必填）');
+        }
+        return;
+      }
+      const checked = document.querySelectorAll('.sub-cb:checked');
+      closeConfirmModal();
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true; btn.innerHTML = '<div class="loader"></div> 正在同步雲端...';
+      const assetRequests = Array.from(checked).map(cb => {
+        const qtyInputId = cb.getAttribute('data-qty-input');
+        let qty = Number(cb.getAttribute('data-count')) || 1;
+        if (qtyInputId) {
+          const inp = document.getElementById(qtyInputId);
+          if (inp) qty = Number(inp.value) || qty;
+        }
+        return { id: cb.value, qty: qty };
+      });
+      const data = { 
+        assetIds: assetRequests,
+        handler: document.getElementById('handlerInput').value, 
+        note: document.getElementById('noteInput').value || "歸還", 
+        targetStatus: document.getElementById('targetStatus').value 
+      };
+      google.script.run
+        .withSuccessHandler(res => {
+          if (res && res.success) {
+            btn.disabled = true;
+            btn.classList.add('btn-success');
+            btn.innerHTML = '<div class="loader"></div> 已完成，正在自動更新清單...';
+            // 🔥 靜默預熱領借用頁快取（讓下次進入領用頁更快）
+            google.script.run.withSuccessHandler(() => {}).withFailureHandler(() => {}).getBorrowedAssets();
+            google.script.run.withSuccessHandler(() => {}).withFailureHandler(() => {}).getWithdrawInventory(false);
+
+            // 自動重整歸還清單，免手動點「重整」
+            setTimeout(() => {
+              document.getElementById('returnSearch').value = '';
+              document.getElementById('noteInput').value = '';
+              document.getElementById('selectedCount').textContent = '0';
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              load((ok) => {
+                btn.disabled = false;
+                btn.innerHTML = '確認提交並更新庫存';
+                btn.classList.remove('btn-success');
+                if (!ok) {
+                  showToast('⚠️ 歸還已完成，但重新整理清單失敗，請手動重新整理頁面。', 'warn');
+                }
+              });
+            }, 350);
+
+            return;
+          }
+          btn.disabled = false;
+          btn.innerHTML = '確認提交並更新庫存';
+          showToast('❌ 歸還失敗：' + ((res && res.message) ? res.message : '未知錯誤'), 'error');
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.innerHTML = '確認提交並更新庫存';
+          showToast('❌ 系統錯誤：' + getErrMsg(err), 'error');
+        })
+        .returnAsset(data);
+    }
+
+    // 🚀 啟動項
+    initLocation();
+    load();
+    function renderTopNav(current) {
+      const items = [
+        { key: 'index',        label: '🏠 主選單' },
+        { key: 'recent',       label: '📋 最近捐贈' },
+        { key: 'near-expiry',  label: '⏰ 即期品' },
+        { key: 'withdraw',     label: '📤 領借用' },
+        { key: 'asset_return', label: '🔙 歸還' },
+        { key: 'asset_entry',  label: '🛠️ 入庫' },
+        { key: 'inventory',    label: '📊 總覽' }
+      ];
+      document.getElementById('topNav').innerHTML = items
+        .map(it => `<a class="${it.key === current ? 'active' : ''}" target="_top" href="${it.key}.html">${it.label}</a>`)
+        .join('');
+    }
+
+    renderTopNav(currentPage);
+  </script>
+</body>
+</html>

@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>盤點校正</title>
+  <style>
+    :root { --primary: #1d4ed8; --bg: #f8fafc; --text: #0f172a; --muted: #64748b; --line: #e2e8f0; --danger: #dc2626; --success: #16a34a; }
+    body { margin: 0; padding: 96px 16px 120px; font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; background: linear-gradient(180deg, #eff6ff 0%, var(--bg) 40%, #f8fafc 100%); color: var(--text); }
+    h1 { margin: 0 0 12px; text-align: center; font-size: 1.8rem; font-weight: 900; }
+    .sub { max-width: 1180px; margin: 0 auto 16px; color: var(--muted); font-weight: 700; text-align: center; }
+    .top-dock, .panel, .table-wrap { background: rgba(255,255,255,0.95); border: 1px solid rgba(226,232,240,0.9); box-shadow: 0 12px 30px rgba(15,23,42,0.08); backdrop-filter: blur(8px); }
+    .top-dock { position: fixed; left: 50%; top: 10px; transform: translateX(-50%); width: min(calc(100% - 24px), 1180px); padding: 8px 10px; border-radius: 16px; z-index: 900; box-sizing: border-box; }
+    .top-nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+    .top-nav a { flex: 0 0 auto; white-space: nowrap; text-decoration: none; color: #334155; background: #e2e8f0; border: 1px solid #cbd5e1; padding: 7px 12px; border-radius: 999px; font-weight: 800; font-size: 13px; }
+    .top-nav a.active { background: #0f172a; color: #fff; border-color: #0f172a; }
+    .layout { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 1fr; gap: 16px; }
+    .panel { border-radius: 18px; padding: 16px; }
+    .section-title { font-weight: 900; margin: 0 0 12px; font-size: 1.05rem; }
+    .hint { font-size: 0.9rem; color: var(--muted); margin: -4px 0 12px; font-weight: 700; }
+    .toolbar { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: end; }
+    label { display: block; font-size: 0.9rem; font-weight: 900; margin: 10px 0 6px; }
+    input, select, textarea { width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--line); font-size: 15px; background: #fff; color: #111827; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,0.12); }
+    .btn { border: 0; border-radius: 12px; padding: 12px 16px; font-weight: 900; cursor: pointer; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-secondary { background: #e2e8f0; color: #334155; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-success { background: var(--success); color: white; }
+    .status-box { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; font-size: 0.9rem; font-weight: 800; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .table-wrap { border-radius: 18px; overflow: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 980px; }
+    thead th { position: sticky; top: 0; background: #f8fafc; border-bottom: 2px solid #e2e8f0; text-align: left; padding: 12px 10px; color: #334155; font-size: 13px; }
+    tbody td { border-bottom: 1px solid #f1f5f9; padding: 10px; vertical-align: top; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .diff-plus { color: var(--success); font-weight: 900; }
+    .diff-minus { color: var(--danger); font-weight: 900; }
+    .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+    .summary-item { background: #f8fafc; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+    .summary-item .k { font-size: 12px; color: var(--muted); font-weight: 800; }
+    .summary-item .v { font-size: 1rem; font-weight: 900; margin-top: 4px; }
+    .modal-mask { position: fixed; inset: 0; background: rgba(15,23,42,0.5); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 16px; box-sizing: border-box; }
+    .modal-mask.show { display: flex; }
+    .modal-card { width: min(860px, 100%); max-height: 80vh; overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 40px rgba(15,23,42,0.2); }
+    .modal-head { padding: 14px 16px; border-bottom: 1px solid var(--line); font-weight: 900; font-size: 1rem; }
+    .modal-body { padding: 14px 16px; }
+    .modal-foot { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; }
+    .fail-list { margin: 0; padding-left: 18px; }
+    .fail-list li { margin-bottom: 6px; line-height: 1.5; }
+    @media (max-width: 960px) { .summary-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } .toolbar { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="top-dock"><div id="topNav" class="top-nav"></div></div>
+  <h1>盤點校正</h1>
+  <div class="sub">這一頁只處理盤點差異，不跟移轉混在一起。先載入帳面資料，再讓盤點人補實盤數。</div>
+
+  <div class="layout">
+    <section class="panel">
+      <div class="section-title">1. 盤點控制</div>
+      <div class="status-box">
+        <div>盤點狀態：<span id="lockState">讀取中...</span></div>
+        <div id="lockNote">-</div>
+      </div>
+      <div class="toolbar">
+        <div>
+          <label for="stocktakeKeyword">關鍵字搜尋</label>
+          <input id="stocktakeKeyword" placeholder="輸入品名、位置、分類...">
+        </div>
+        <button class="btn btn-primary" id="searchBtn" type="button">重新載入</button>
+        <button class="btn btn-secondary" id="refreshDiffBtn" type="button">重新計算差異</button>
+      </div>
+      <div class="row-actions" style="margin-top:12px;">
+        <button class="btn btn-secondary" id="lockBtn" type="button">切換盤點鎖定</button>
+        <button class="btn btn-success" id="reviewBtn" type="button">產生校正預覽</button>
+        <button class="btn btn-danger" id="applyBtn" type="button">正式回寫校正</button>
+        <button class="btn btn-primary" id="exportSheetBtn" type="button">匯出盤點回填表</button>
+        <button class="btn btn-secondary" id="importBtn" type="button">匯入校正資料</button>
+      </div>
+      <div class="hint">建議流程：先按「匯出盤點回填表」取得 Excel → 填入實盤數量 → 按「匯入校正資料」回寫。</div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">2. 差異摘要</div>
+      <div class="summary-grid">
+        <div class="summary-item"><div class="k">明細筆數</div><div class="v" id="sumCount">0</div></div>
+        <div class="summary-item"><div class="k">盤盈筆數</div><div class="v" id="sumPlus">0</div></div>
+        <div class="summary-item"><div class="k">盤虧筆數</div><div class="v" id="sumMinus">0</div></div>
+        <div class="summary-item"><div class="k">待複核</div><div class="v" id="sumReview">0</div></div>
+      </div>
+      <label for="correctionReason">通用校正原因</label>
+      <textarea id="correctionReason" rows="3" placeholder="例如：盤點人重算、移位未登錄、漏記、輸入錯誤"></textarea>
+    </section>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:160px;">品名</th>
+          <th style="width:120px;">位置</th>
+          <th class="num" style="width:90px;">帳面量</th>
+          <th class="num" style="width:110px;">實盤量</th>
+          <th class="num" style="width:90px;">差異量</th>
+          <th style="width:220px;">差異原因</th>
+          <th style="width:130px;">校正狀態</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr><td colspan="7" style="padding:20px; color:#64748b; font-weight:700;">載入中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="importResultModal" class="modal-mask" role="dialog" aria-modal="true" aria-labelledby="importResultTitle">
+    <div class="modal-card">
+      <div class="modal-head" id="importResultTitle">匯入回寫結果</div>
+      <div class="modal-body" id="importResultBody"></div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" id="importResultCloseBtn" type="button">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./gas-polyfill.js"></script>
+  <script>
+    const state = { items: [], locked: false, lockInfo: {} };
+
+    function renderLockInfo() {
+      const stateEl = document.getElementById('lockState');
+      const noteEl = document.getElementById('lockNote');
+      stateEl.textContent = state.locked ? '已鎖定' : '未鎖定';
+      noteEl.textContent = state.lockInfo && state.lockInfo.note ? state.lockInfo.note : '-';
+      document.getElementById('lockBtn').textContent = state.locked ? '解除盤點鎖定' : '開啟盤點鎖定';
+    }
+
+    function updateDiffForRow(row) {
+      const actualInput = row.querySelector('[data-actual]');
+      const diffCell = row.querySelector('[data-diff]');
+      const statusCell = row.querySelector('[data-status]');
+      const reasonInput = row.querySelector('[data-reason]');
+      const bookQty = Number(row.getAttribute('data-book')) || 0;
+      const actualQty = Number(actualInput.value) || 0;
+      const diff = actualQty - bookQty;
+      diffCell.textContent = String(diff);
+      diffCell.className = 'num ' + (diff > 0 ? 'diff-plus' : diff < 0 ? 'diff-minus' : '');
+      if (diff === 0) statusCell.textContent = '已校正';
+      else if (Math.abs(diff) >= 10) statusCell.textContent = '待複核';
+      else statusCell.textContent = diff > 0 ? '盤盈' : '盤虧';
+      if (!reasonInput.value) reasonInput.value = document.getElementById('correctionReason').value || '';
+    }
+
+    function renderTable(items) {
+      const box = document.getElementById('tableBody');
+      if (!items || !items.length) {
+        box.innerHTML = '<tr><td colspan="7" style="padding:20px; color:#64748b; font-weight:700;">沒有資料。</td></tr>';
+        return;
+      }
+      box.innerHTML = items.map((item, idx) => `
+        <tr data-book="${Number(item.bookQty) || 0}" data-id="${String(item.primaryId || '').replace(/"/g, '&quot;')}" data-name="${String(item.name || '').replace(/"/g, '&quot;')}" data-location="${String(item.location || '').replace(/"/g, '&quot;')}">
+          <td><b>${item.name || ''}</b><br><small style="color:#64748b;">${item.category || ''} ${item.color || ''}</small></td>
+          <td>${item.location || '-'}</td>
+          <td class="num">${Number(item.bookQty) || 0}</td>
+          <td class="num"><input data-actual type="number" min="0" step="1" value="${item.actualQty === '' ? (Number(item.bookQty) || 0) : item.actualQty}" style="width:100px; text-align:right;"></td>
+          <td class="num" data-diff>0</td>
+          <td><input data-reason type="text" placeholder="差異原因"></td>
+          <td data-status>${item.adjustStatus || '待校正'}</td>
+        </tr>
+      `).join('');
+
+      box.querySelectorAll('tr[data-book]').forEach(row => {
+        row.querySelector('[data-actual]').addEventListener('input', () => updateDiffForRow(row));
+        row.querySelector('[data-reason]').addEventListener('input', () => updateDiffForRow(row));
+        updateDiffForRow(row);
+      });
+      recomputeSummary();
+    }
+
+    function recomputeSummary() {
+      const rows = Array.from(document.querySelectorAll('tbody#tableBody tr[data-book]'));
+      let plus = 0, minus = 0, review = 0;
+      rows.forEach(row => {
+        const diff = Number(row.querySelector('[data-diff]').textContent) || 0;
+        const status = row.querySelector('[data-status]').textContent || '';
+        if (diff > 0) plus++;
+        else if (diff < 0) minus++;
+        if (status === '待複核') review++;
+      });
+      document.getElementById('sumCount').textContent = String(rows.length);
+      document.getElementById('sumPlus').textContent = String(plus);
+      document.getElementById('sumMinus').textContent = String(minus);
+      document.getElementById('sumReview').textContent = String(review);
+    }
+
+    function loadData() {
+      const keyword = document.getElementById('stocktakeKeyword').value || '';
+      document.getElementById('tableBody').innerHTML = '<tr><td colspan="7" style="padding:20px; color:#64748b; font-weight:700;">載入中...</td></tr>';
+      google.script.run.withSuccessHandler(res => {
+        state.items = (res && res.items) || [];
+        state.locked = !!(res && res.locked);
+        state.lockInfo = (res && res.lockInfo) || {};
+        renderLockInfo();
+        const filtered = keyword ? state.items.filter(item => {
+          const hay = [item.name, item.location, item.category, item.color].join(' ').toLowerCase();
+          return hay.indexOf(keyword.toLowerCase()) > -1;
+        }) : state.items;
+        renderTable(filtered);
+      }).withFailureHandler(err => {
+        document.getElementById('tableBody').innerHTML = '<tr><td colspan="7" style="padding:20px; color:#dc2626; font-weight:700;">載入失敗：' + String(err || '') + '</td></tr>';
+      }).getInventoryCorrectionData(true);
+    }
+
+    function toggleLock() {
+      const nextLocked = !state.locked;
+      const note = nextLocked ? '盤點進行中' : '盤點已結束';
+      google.script.run.withSuccessHandler(res => {
+        state.locked = !!(res && res.locked);
+        state.lockInfo = { note: res && res.note ? res.note : note };
+        renderLockInfo();
+      }).setStocktakeLock(nextLocked, note);
+    }
+
+    function previewCorrection() {
+      const changes = collectCorrectionRows();
+      if (!changes.length) return alert('目前沒有差異，不需要回寫。');
+      const lines = changes.slice(0, 10).map(item => {
+        return `${item.name}: ${item.diff > 0 ? '+' : ''}${item.diff}`;
+      });
+      alert('校正預覽（前 10 筆）：\n\n' + lines.join('\n') + (changes.length > 10 ? '\n...' : ''));
+    }
+
+    function collectCorrectionRows() {
+      const rows = Array.from(document.querySelectorAll('tbody#tableBody tr[data-book]'));
+      const commonReason = String(document.getElementById('correctionReason').value || '').trim();
+      return rows.map(row => {
+        const bookQty = Number(row.getAttribute('data-book')) || 0;
+        const actualQty = Math.max(0, Number(row.querySelector('[data-actual]').value) || 0);
+        const diff = actualQty - bookQty;
+        return {
+          primaryId: String(row.getAttribute('data-id') || '').trim(),
+          name: String(row.getAttribute('data-name') || '').trim(),
+          location: String(row.getAttribute('data-location') || '').trim(),
+          bookQty: bookQty,
+          actualQty: actualQty,
+          diff: diff,
+          reason: String(row.querySelector('[data-reason]').value || commonReason || '').trim()
+        };
+      }).filter(item => item.diff !== 0);
+    }
+
+    function applyCorrection() {
+      if (!state.locked) {
+        alert('請先開啟盤點鎖定，再執行正式回寫。');
+        return;
+      }
+
+      const changes = collectCorrectionRows();
+      if (!changes.length) {
+        alert('目前沒有差異，不需要回寫。');
+        return;
+      }
+
+      const reason = String(document.getElementById('correctionReason').value || '').trim();
+      if (!confirm(`將回寫 ${changes.length} 筆差異，確定執行？`)) return;
+
+      const btn = document.getElementById('applyBtn');
+      const oldText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '回寫中...';
+
+      google.script.run.withSuccessHandler(res => {
+        btn.disabled = false;
+        btn.textContent = oldText;
+        if (!res || !res.success) {
+          const msg = (res && res.message) ? res.message : '回寫失敗';
+          return alert(msg);
+        }
+        const failedCount = Number(res.failedCount) || 0;
+        let msg = `完成：成功 ${Number(res.updatedCount) || 0} 筆`;
+        if (failedCount > 0) msg += `，失敗 ${failedCount} 筆`;
+        alert(msg);
+        loadData();
+      }).withFailureHandler(err => {
+        btn.disabled = false;
+        btn.textContent = oldText;
+        alert('回寫失敗：' + String(err || ''));
+      }).applyStocktakeCorrections({ rows: changes, reason: reason });
+    }
+
+    function exportStocktakeSheet() {
+      if (!state.items || !state.items.length) {
+        alert('請先載入資料，再匯出盤點回填表。');
+        return;
+      }
+      const btn = document.getElementById('exportSheetBtn');
+      const oldText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '匯出中...';
+
+      loadXlsxLibrary().then(XLSXLib => {
+        const headers = ['資產編號', '品名', '規格/顏色', '位置', '保管人', '帳面數', '實盤數量', '差異原因'];
+        const dataRows = state.items.map(item => [
+          String(item.primaryId || ''),
+          String(item.name || ''),
+          [item.spec, item.color].filter(v => v && v !== '無').join(' / ') || '',
+          String(item.location || ''),
+          String(item.keeper || ''),
+          Number(item.bookQty) || 0,
+          '',
+          ''
+        ]);
+        const ws = XLSXLib.utils.aoa_to_sheet([headers].concat(dataRows));
+        ws['!cols'] = [
+          { wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 20 }, { wch: 14 },
+          { wch: 10 }, { wch: 10 }, { wch: 28 }
+        ];
+        const wb = XLSXLib.utils.book_new();
+        XLSXLib.utils.book_append_sheet(wb, ws, '盤點回填');
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        XLSXLib.writeFile(wb, '盤點回填_' + dateStr + '.xlsx');
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }).catch(err => {
+        btn.disabled = false;
+        btn.textContent = oldText;
+        alert('匯出失敗：' + String(err || ''));
+      });
+    }
+
+    function loadXlsxLibrary() {
+      return new Promise((resolve, reject) => {
+        if (window.XLSX) {
+          resolve(window.XLSX);
+          return;
+        }
+
+        const existing = document.getElementById('xlsx-lib-script');
+        if (existing) {
+          existing.addEventListener('load', () => resolve(window.XLSX), { once: true });
+          existing.addEventListener('error', () => reject(new Error('XLSX 載入失敗')), { once: true });
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.id = 'xlsx-lib-script';
+        script.src = 'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js';
+        script.onload = () => resolve(window.XLSX);
+        script.onerror = () => reject(new Error('XLSX 載入失敗'));
+        document.head.appendChild(script);
+      });
+    }
+
+    function normalizeHeaderText(v) {
+      return String(v || '').trim().toLowerCase().replace(/[\s()（）/／_\-]+/g, '');
+    }
+
+    function findHeaderIndex(headers, candidates) {
+      const normalized = headers.map(normalizeHeaderText);
+      for (const c of candidates) {
+        const idx = normalized.indexOf(normalizeHeaderText(c));
+        if (idx >= 0) return idx;
+      }
+      return -1;
+    }
+
+    function extractPrimaryIdFromIdentifier(identifier) {
+      const raw = String(identifier || '').trim();
+      if (!raw) return '';
+      const first = raw.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean)[0] || '';
+      if (!first) return '';
+      if (first.indexOf('~') > -1) {
+        return first.split('~')[0].trim();
+      }
+      return first;
+    }
+
+    function normalizeImportedNumber(value) {
+      if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+      const raw = String(value == null ? '' : value).trim();
+      if (!raw) return NaN;
+      const normalized = raw
+        .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 65248))
+        .replace(/[＋]/g, '+')
+        .replace(/[－–—]/g, '-')
+        .replace(/[，,]/g, '')
+        .replace(/ /g, '')
+        .trim();
+
+      if (/^[+-]?\d+(\.\d+)?$/.test(normalized)) return Number(normalized);
+
+      const matched = normalized.match(/[+-]?\d+(\.\d+)?/);
+      if (matched) return Number(matched[0]);
+      return NaN;
+    }
+
+    function getImportHeaderMeta(headerRow) {
+      const headers = (headerRow || []).map(v => String(v || '').trim());
+      const hasIdentifier = headers.some(v => v === '識別鍵' || v === '編號範圍' || v === '主編號' || v === '資產編號');
+      const hasQty = headers.some(v => v === '帳面數' || v === '帳面量') && headers.some(v => v === '實盤數量' || v === '實盤量' || v === '差異量');
+      if (!hasIdentifier || !hasQty) return null;
+
+      const primaryIdCol = findHeaderIndex(headers, ['主編號', '資產編號']);
+      const identifierCol = findHeaderIndex(headers, ['識別鍵', '編號範圍']);
+      if (primaryIdCol < 0 && identifierCol < 0) return null;
+
+      return {
+        headers: headers,
+        primaryIdCol: primaryIdCol,
+        identifierCol: identifierCol,
+        nameCol: findHeaderIndex(headers, ['品名', '品名規格']),
+        locationCol: findHeaderIndex(headers, ['位置']),
+        bookQtyCol: findHeaderIndex(headers, ['帳面數', '帳面量']),
+        actualQtyCol: findHeaderIndex(headers, ['實盤數量', '實盤量']),
+        diffCol: findHeaderIndex(headers, ['差異量', '差異']),
+        reasonCol: findHeaderIndex(headers, ['差異原因', '原因'])
+      };
+    }
+
+    function parseImportedRows(sheet, XLSXLib) {
+      const rows = XLSXLib.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      if (!rows.length) return [];
+
+      const parsed = [];
+      let meta = null;
+      let seenAssetHeader = false;
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const headerMeta = getImportHeaderMeta(row);
+        if (headerMeta) {
+          meta = headerMeta;
+          seenAssetHeader = true;
+          continue;
+        }
+        if (!meta) continue;
+
+        const lineNo = i + 1;
+        const primaryIdRaw = String(meta.primaryIdCol >= 0 ? row[meta.primaryIdCol] : '').trim();
+        const identifier = String(meta.identifierCol >= 0 ? row[meta.identifierCol] : '').trim();
+        const primaryId = primaryIdRaw || extractPrimaryIdFromIdentifier(identifier);
+        if (!primaryId) continue;
+
+        const bookQty = normalizeImportedNumber(meta.bookQtyCol >= 0 ? row[meta.bookQtyCol] : 0) || 0;
+        const actualRaw = String(meta.actualQtyCol >= 0 ? row[meta.actualQtyCol] : '').trim();
+        const diffRaw = String(meta.diffCol >= 0 ? row[meta.diffCol] : '').trim();
+        const reason = String(meta.reasonCol >= 0 ? row[meta.reasonCol] : '').trim();
+
+        let actualQty = actualRaw !== '' ? normalizeImportedNumber(actualRaw) : NaN;
+        if (!Number.isFinite(actualQty) && diffRaw !== '') {
+          const diff = normalizeImportedNumber(diffRaw);
+          if (Number.isFinite(diff)) actualQty = bookQty + diff;
+        }
+        if (!Number.isFinite(actualQty)) continue;
+        if (actualQty < 0) throw new Error('第 ' + lineNo + ' 列實盤數量不可小於 0');
+
+        parsed.push({
+          primaryId: primaryId,
+          name: String(meta.nameCol >= 0 ? row[meta.nameCol] : '').trim(),
+          location: String(meta.locationCol >= 0 ? row[meta.locationCol] : '').trim(),
+          bookQty: bookQty,
+          actualQty: Math.floor(actualQty),
+          reason: reason
+        });
+      }
+
+      if (!seenAssetHeader) {
+        throw new Error('找不到可辨識表頭，請使用資產清冊匯出的檔案');
+      }
+      return parsed;
+    }
+
+    function parseImportedWorkbook(workbook, XLSXLib) {
+      const preferredNames = ['盤點回填'];
+      const orderedSheetNames = workbook.SheetNames.slice().sort((left, right) => {
+        const leftPref = preferredNames.indexOf(String(left || '').trim());
+        const rightPref = preferredNames.indexOf(String(right || '').trim());
+        const leftScore = leftPref === -1 ? 999 : leftPref;
+        const rightScore = rightPref === -1 ? 999 : rightPref;
+        return leftScore - rightScore;
+      });
+
+      let parsed = [];
+      let foundHeader = false;
+      orderedSheetNames.forEach(sheetName => {
+        const sheet = workbook.Sheets[sheetName];
+        if (!sheet) return;
+        try {
+          const rows = parseImportedRows(sheet, XLSXLib);
+          if (rows.length) parsed = parsed.concat(rows);
+          foundHeader = true;
+        } catch (err) {
+          if (String(err || '').indexOf('找不到可辨識表頭') === -1) throw err;
+        }
+      });
+
+      if (!foundHeader) {
+        throw new Error('找不到可辨識表頭，請使用資產清冊匯出的檔案');
+      }
+
+      const deduped = [];
+      const seen = new Set();
+      parsed.forEach(item => {
+        const key = [item.primaryId, item.location, item.bookQty, item.actualQty, item.reason].join('||');
+        if (seen.has(key)) return;
+        seen.add(key);
+        deduped.push(item);
+      });
+      return deduped;
+    }
+
+    function importCorrectionFile() {
+      if (!state.locked) {
+        alert('請先開啟盤點鎖定，再匯入校正資料。');
+        return;
+      }
+
+      const btn = document.getElementById('importBtn');
+      const oldText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '選擇檔案中...';
+
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.xlsx,.xls';
+      input.onchange = () => {
+        const file = input.files && input.files[0];
+        if (!file) {
+          btn.disabled = false;
+          btn.textContent = oldText;
+          return;
+        }
+
+        loadXlsxLibrary().then(XLSXLib => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              const data = new Uint8Array(reader.result);
+              const wb = XLSXLib.read(data, { type: 'array' });
+              const parsed = parseImportedWorkbook(wb, XLSXLib);
+              const changes = parsed.filter(x => Number(x.actualQty) !== Number(x.bookQty));
+              if (!changes.length) {
+                throw new Error('沒有可回寫差異（已辨識 ' + parsed.length + ' 筆資產列，但實盤數量與帳面數都相同，或實盤數量欄未被辨識為數字）');
+              }
+
+              const reason = String(document.getElementById('correctionReason').value || '').trim();
+              if (!confirm('將回寫 ' + changes.length + ' 筆差異，確定執行？')) {
+                btn.disabled = false;
+                btn.textContent = oldText;
+                return;
+              }
+
+              btn.textContent = '回寫中...';
+              google.script.run.withSuccessHandler(res => {
+                btn.disabled = false;
+                btn.textContent = oldText;
+                if (!res || !res.success) {
+                  alert('匯入回寫失敗：' + (res && res.message ? res.message : '未知錯誤'));
+                  return;
+                }
+                const failed = Number(res.failedCount) || 0;
+                let msg = '完成：成功 ' + (Number(res.updatedCount) || 0) + ' 筆';
+                if (failed > 0) msg += '，失敗 ' + failed + ' 筆';
+                if (failed > 0) {
+                  showImportResultModal(res);
+                } else {
+                  alert(msg);
+                }
+                loadData();
+              }).withFailureHandler(err => {
+                btn.disabled = false;
+                btn.textContent = oldText;
+                alert('匯入回寫失敗：' + String(err || ''));
+              }).applyStocktakeCorrections({
+                rows: changes.map(x => Object.assign({}, x, { reason: x.reason || reason })),
+                reason: reason
+              });
+            } catch (err) {
+              btn.disabled = false;
+              btn.textContent = oldText;
+              alert('解析檔案失敗：' + String(err || ''));
+            }
+          };
+          reader.onerror = () => {
+            btn.disabled = false;
+            btn.textContent = oldText;
+            alert('讀取檔案失敗');
+          };
+          reader.readAsArrayBuffer(file);
+        }).catch(err => {
+          btn.disabled = false;
+          btn.textContent = oldText;
+          alert('XLSX 載入失敗：' + String(err || ''));
+        });
+      };
+
+      input.click();
+    }
+
+    function escapeHtml(text) {
+      return String(text == null ? '' : text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function showImportResultModal(res) {
+      const modal = document.getElementById('importResultModal');
+      const body = document.getElementById('importResultBody');
+      const okCount = Number(res && res.updatedCount) || 0;
+      const failCount = Number(res && res.failedCount) || 0;
+      const failures = Array.isArray(res && res.failures) ? res.failures : [];
+
+      let html = '';
+      html += '<div style="font-weight:800; margin-bottom:10px;">成功回寫 ' + okCount + ' 筆，失敗 ' + failCount + ' 筆</div>';
+
+      if (failures.length > 0) {
+        html += '<div style="margin-bottom:8px; font-weight:800; color:#b91c1c;">失敗明細：</div>';
+        html += '<ol class="fail-list">';
+        failures.slice(0, 200).forEach(f => {
+          const key = f && f.assetId ? f.assetId : ('#' + (Number(f && f.index) + 1 || '?'));
+          const reason = (f && f.reason) ? f.reason : '未知原因';
+          html += '<li><b>' + escapeHtml(key) + '</b>：' + escapeHtml(reason) + '</li>';
+        });
+        html += '</ol>';
+      }
+
+      body.innerHTML = html;
+      modal.classList.add('show');
+    }
+
+    function closeImportResultModal() {
+      const modal = document.getElementById('importResultModal');
+      modal.classList.remove('show');
+    }
+
+    window.addEventListener('load', () => {
+      document.getElementById('topNav').innerHTML = `
+        <a href="index.html" target="_top">🏠 主選單</a>
+        <a href="inventory.html" target="_top">📊 總覽</a>
+        <a href="transfer.html" target="_top">↔️ 移轉</a>
+        <a href="stocktake-correction.html" target="_top" class="active">🧾 盤點校正</a>
+      `;
+
+      loadData();
+      document.getElementById('searchBtn').addEventListener('click', loadData);
+      document.getElementById('refreshDiffBtn').addEventListener('click', () => {
+        document.querySelectorAll('tbody#tableBody tr[data-book]').forEach(row => updateDiffForRow(row));
+        recomputeSummary();
+      });
+      document.getElementById('lockBtn').addEventListener('click', toggleLock);
+      document.getElementById('reviewBtn').addEventListener('click', previewCorrection);
+      document.getElementById('applyBtn').addEventListener('click', applyCorrection);
+      document.getElementById('exportSheetBtn').addEventListener('click', exportStocktakeSheet);
+      document.getElementById('importBtn').addEventListener('click', importCorrectionFile);
+      document.getElementById('importResultCloseBtn').addEventListener('click', closeImportResultModal);
+      document.getElementById('importResultModal').addEventListener('click', e => {
+        if (e.target && e.target.id === 'importResultModal') closeImportResultModal();
+      });
+      document.getElementById('stocktakeKeyword').addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          loadData();
+        }
+      });
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeImportResultModal();
+      });
+      document.getElementById('correctionReason').addEventListener('input', () => {
+        document.querySelectorAll('tbody#tableBody tr[data-book]').forEach(row => updateDiffForRow(row));
+      });
+    });
+  </script>
+</body>
+</html>

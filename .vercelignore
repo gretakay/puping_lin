@@ -1,0 +1,17 @@
+# Apps Script 後端專用檔案，不應該被 Vercel 當成靜態檔案發布出去
+# （後端部署走 clasp push，跟 Vercel 完全分開）
+AppRouter.js
+ApiRouter.js
+AssetOps.js
+CacheAndVersion.js
+Expiry.js
+InventoryQuery.js
+Notifications.js
+ReportingExport.js
+WorkflowPages.js
+random.js
+分頁控制台.gs.js
+未命名.js
+appsscript.json
+.clasp.json
+MIGRATION.md

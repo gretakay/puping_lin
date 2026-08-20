@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>即期物資警示</title>
+  <style>
+    body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; padding: 98px 20px 20px; line-height: 1.6; background-color: #f8fafc; max-width: 600px; margin: auto; }
+    h1 { color: #d32f2f; text-align: center; margin-bottom: 25px; font-weight: 800; }
+    
+    .warning-item { 
+      background: white; border: 1px solid #feb2b2; border-left: 6px solid #e53e3e; 
+      margin-bottom: 15px; padding: 15px; border-radius: 12px; 
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+      display: flex; align-items: center; gap: 15px;
+    }
+
+    /* 🚀 供僧特殊樣式 */
+    .sangha-item { border-left-color: #f59e0b; background-color: #fffbeb; border-color: #fde68a; }
+    .sangha-tag { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; border: 1px solid #fde68a; margin-left: 5px; }
+
+    .thumb-img { width: 75px; height: 75px; border-radius: 8px; object-fit: cover; border: 1px solid #eee; cursor: zoom-in; flex-shrink: 0; }
+    .no-img { width: 75px; height: 75px; border-radius: 8px; background: #fff5f5; color: #feb2b2; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+
+    .content-box { flex-grow: 1; }
+    .expiry-date { color: #e53e3e; font-weight: bold; margin-top: 5px; font-size: 1em; }
+    .cat { color: #718096; font-size: 0.8em; font-weight: bold; }
+    .location-tag { color: #4a5568; font-size: 0.85em; margin-top: 4px; display: block; }
+    
+    .qty-box { background: rgba(229, 62, 62, 0.05); padding: 8px 12px; border-radius: 6px; margin-top: 8px; border: 1px dashed #feb2b2; font-size: 0.9em; }
+    .sangha-item .qty-box { background: rgba(245, 158, 11, 0.05); border-color: #fde68a; }
+
+    .skeleton { background: linear-gradient(110deg, #ececec 8%, #f5f5f5 18%, #ececec 33%); background-size: 200% 100%; animation: shine 1.5s linear infinite; height: 120px; border-radius: 10px; margin-bottom: 15px; }
+    @keyframes shine { to { background-position-x: -200%; } }
+
+    #image-modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; flex-direction: column; }
+    #modal-img { max-width: 90%; max-height: 80%; border-radius: 8px; border: 4px solid white; }
+    
+    hr { border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0; }
+    .empty-msg { text-align: center; padding: 50px; color: #718096; }
+    .top-dock {
+      position: fixed;
+      left: 50%;
+      top: 10px;
+      transform: translateX(-50%);
+      width: min(calc(100% - 24px), 600px);
+      padding: 8px 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid rgba(203,213,224,0.95);
+      box-shadow: 0 10px 26px rgba(15,23,42,0.1);
+      backdrop-filter: blur(8px);
+      z-index: 900;
+      box-sizing: border-box;
+    }
+    .top-nav { display: flex; gap: 8px; flex-wrap: wrap; overflow-x: visible; justify-content: center; align-items: center; width: 100%; box-sizing: border-box; margin: 0; padding: 0; }
+    .top-nav::-webkit-scrollbar { display: none; }
+    .top-nav a { flex: 0 0 auto; white-space: nowrap; text-align: center; text-decoration: none; color: #334155; background: #e2e8f0; border: 1px solid #cbd5e1; padding: 7px 12px; border-radius: 999px; font-weight: 800; font-size: 13px; }
+    .top-nav a.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+
+    .pagination-ctrl { display: flex; justify-content: center; align-items: center; gap: 12px; margin: 15px 0 5px; }
+    .btn-page { padding: 6px 12px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; font-weight: bold; cursor: pointer; }
+    .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+    #pageInfo { font-weight: 700; color: #475569; }
+
+    @media (max-width: 600px) {
+      body { padding: 104px 12px 12px; max-width: 100%; }
+      .warning-item { padding: 12px; gap: 10px; }
+      .thumb-img, .no-img { width: 64px; height: 64px; }
+      .top-dock { width: calc(100% - 24px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-dock">
+    <div id="topNav" class="top-nav"></div>
+  </div>
+  <h1>⏰ 即期物資提醒</h1>
+  <p style="text-align:center; font-size:0.8em; color:#94a3b8; margin-top:-15px;">( 僅顯示 7 天內到期且尚未過期之物資 )</p>
+
+  <div id="list">
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+  </div>
+
+  <div id="pager" class="pagination-ctrl" style="display:none;">
+    <button id="prevBtn" class="btn-page">上一頁</button>
+    <span id="pageInfo">第 1 / 1 頁</span>
+    <button id="nextBtn" class="btn-page">下一頁</button>
+  </div>
+
+  <div id="image-modal" onclick="this.style.display='none'">
+    <img id="modal-img" src="">
+    <p style="color:white; margin-top:15px;">(點擊任何處關閉)</p>
+  </div>
+
+  <script src="./gas-polyfill.js"></script>
+  <script>
+    // XSS 防護
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+let expiryItems = [];
+let currentPage = 1;
+const pageSize = 5;
+
+function getToday() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+function updatePager(total) {
+      const pager = document.getElementById('pager');
+      const pageInfo = document.getElementById('pageInfo');
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      if (total === 0) {
+        pager.style.display = 'none';
+        return;
+      }
+      pager.style.display = 'flex';
+      pageInfo.textContent = '第 ' + currentPage + ' / ' + totalPages + ' 頁';
+      prevBtn.disabled = (currentPage <= 1);
+      nextBtn.disabled = (currentPage >= totalPages);
+}
+
+    function getThumbUrl(url) {
+      if (!url) return "";
+      var src = String(url).trim();
+      if (src.indexOf('drive.google.com') > -1) {
+        var m = src.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        var m2 = src.match(/id=([a-zA-Z0-9_-]+)/);
+        var id = (m && m[1]) ? m[1] : ((m2 && m2[1]) ? m2[1] : "");
+        if (id) return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w400';
+      }
+      return src;
+    }
+
+function renderPage(today) {
+      const container = document.getElementById('list');
+      container.innerHTML = '';
+      if (expiryItems.length === 0) {
+        container.innerHTML = '<div class="empty-msg">🎉 <strong>目前沒有即將到期的物資。</strong></div>';
+        updatePager(0);
+        return;
+      }
+
+      const start = (currentPage - 1) * pageSize;
+      const pageItems = expiryItems.slice(start, start + pageSize);
+
+      pageItems.forEach(d => {
+        const isSangha = d.stockStatus === '供僧';
+        const expDate = new Date(d.expiryDate);
+        expDate.setHours(0, 0, 0, 0);
+        const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+
+        const div = document.createElement('div');
+        div.className = 'warning-item' + (isSangha ? ' sangha-item' : '');
+        const rawImg = getThumbUrl(d.photoUrl || "");
+        const isValidImg = rawImg.indexOf('http') === 0 || rawImg.indexOf('data:image') === 0;
+
+        const displayItem = maskItem(d.itemName);
+
+        const imgHtml = isValidImg ? 
+          `<img src="${rawImg}" class="thumb-img" onclick="zoomImg('${rawImg}')" 
+                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">` +
+          `<div class="no-img" style="display:none;">${isSangha ? '☸️' : '⏰'}</div>` : 
+          `<div class="no-img">${isSangha ? '☸️' : '⏰'}</div>`;
+
+        div.innerHTML = `
+          ${imgHtml}
+          <div class="content-box">
+            <div>
+              <span class="cat">[${escapeHtml(d.category)}]</span> 
+              ${isSangha ? '<span class="sangha-tag">供僧</span>' : ''}
+              <br><strong>${escapeHtml(displayItem)}</strong> ${(d.color && d.color !== '無') ? `(${escapeHtml(d.color)})` : ''}
+            </div>
+            <span class="location-tag">📍 存放位置：${escapeHtml(d.location || '未標註')}</span>
+            <div class="qty-box">
+              <span style="color:#2d3748; font-weight:bold;">目前剩餘：${escapeHtml(String(d.quantity))} ${escapeHtml(d.unit)}</span>
+            </div>
+            <div class="expiry-date">
+              ⚠️ ${diffDays === 0 ? '今天要過期了！' : '還剩 ' + diffDays + ' 天到期'}
+            </div>
+            <div style="font-size:0.75em; color:#94a3b8;">效期至：${escapeHtml(d.expiryDate)}</div>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      updatePager(expiryItems.length);
+}
+
+function loadExpiryData() {
+      google.script.run.withSuccessHandler(res => {
+        const container = document.getElementById('list');
+        if (!res || !res.success) {
+          container.innerHTML = `<div style="color:red; text-align:center;">❌ 載入失敗</div>`;
+          return;
+        }
+
+        const today = getToday();
+        container.innerHTML = ''; 
+        
+        const validList = (res.expiry || []).filter(d => {
+          const expDate = new Date(d.expiryDate);
+          expDate.setHours(0, 0, 0, 0);
+          return expDate >= today; 
+        });
+        expiryItems = validList;
+        currentPage = 1;
+        renderPage(today);
+      }).getNearExpiryLite(7); 
+    }
+
+    // 🚀 關鍵修正 3：zoomImg 也要檢查格式
+    function zoomImg(src) {
+      if (!src || (src.indexOf('http') !== 0 && src.indexOf('data:image') !== 0)) return;
+      const modal = document.getElementById('image-modal');
+      const modalImg = document.getElementById('modal-img');
+      modalImg.src = src;
+      modal.style.display = 'flex';
+    }
+
+    // 🚀 關鍵修正 4：補上遮罩函式 (若不需要可移除)
+    function maskItem(itemName) {
+      if (!itemName) return "未知物品";
+      if (itemName.length <= 1) return itemName;
+      if (itemName.length === 2) return itemName[0] + "O";
+      return itemName[0] + "O" + itemName[itemName.length - 1];
+    }
+
+    loadExpiryData();
+
+    document.getElementById('prevBtn').onclick = function() {
+      if (currentPage > 1) { currentPage--; renderPage(getToday()); }
+    };
+    document.getElementById('nextBtn').onclick = function() {
+      const totalPages = Math.max(1, Math.ceil(expiryItems.length / pageSize));
+      if (currentPage < totalPages) { currentPage++; renderPage(getToday()); }
+    };
+
+    function renderTopNav() {
+      const items = [
+        { key: 'index',        label: '🏠 主選單' },
+        { key: 'recent',       label: '📋 最近捐贈' },
+        { key: 'near-expiry',  label: '⏰ 即期品' },
+        { key: 'withdraw',     label: '📤 領借用' },
+        { key: 'asset_return', label: '🔙 歸還' },
+        { key: 'asset_entry',  label: '🛠️ 入庫' },
+        { key: 'inventory',    label: '📊 總覽' }
+      ];
+      document.getElementById('topNav').innerHTML = items
+        .map(it => `<a class="${it.key === 'near-expiry' ? 'active' : ''}" target="_top" href="${it.key}.html">${it.label}</a>`)
+        .join('');
+    }
+
+    renderTopNav();
+  </script>
+</body>
+</html>

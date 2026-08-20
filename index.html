@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>「普平資糧功德海」
+  </title>
+  <style>
+    body { 
+      font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; 
+      padding: 98px 20px 126px; margin: auto; line-height: 1.6; 
+      background-color: #f0f2f5; color: #333;
+    }
+    
+    h1 { color: #2c3e50; text-align: center; margin-bottom: 25px; font-weight: 800; }
+    
+    #donation-form { 
+      background: white; padding: 30px; border-radius: 16px; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08); max-width: 850px; 
+      margin: auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px 25px;
+    }
+
+    @media (max-width: 600px) {
+      #donation-form { grid-template-columns: 1fr; }
+      h1, .full-width, button, .photo-area, .grid-span-2 { grid-column: span 1 !important; }
+    }
+
+    h1, .grid-span-2, button, .photo-area { grid-column: span 2; }
+
+    label { display: block; font-weight: 900; color: #1e293b; font-size: 0.95rem; margin-bottom: 5px; }
+    
+    input, select { 
+      width: 100%; padding: 12px; box-sizing: border-box; 
+      border: 2px solid #cbd5e0; border-radius: 10px; font-size: 16px; 
+      transition: all 0.2s; font-weight: 600; color: #000;
+      scroll-margin-bottom: 180px;
+    }
+    
+    input:focus, select:focus { border-color: #4CAF50; box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1); outline: none; }
+
+    .hint { font-size: 0.85em; color: #4a5568; background: #f0fff4; padding: 12px; border-radius: 8px; border-left: 5px solid #4CAF50; font-weight: 700; }
+
+    .photo-area { 
+      background: #f8fafc; padding: 20px; border-radius: 12px; 
+      border: 2px dashed #cbd5e0; text-align: center; margin: 10px 0;
+    }
+
+    #previewImg { 
+      max-width: 150px; border-radius: 10px; 
+      margin-top: 15px; display: none; border: 3px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    button { 
+      padding: 18px; background: #4CAF50; color: white; border: none; 
+      cursor: pointer; font-size: 18px; border-radius: 12px; font-weight: 900; 
+      margin-top: 15px; transition: 0.3s; box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);
+    }
+    
+    button:hover { background: #45a049; transform: translateY(-1px); }
+    button:disabled { background: #cbd5e0; transform: none; box-shadow: none; }
+
+    .loader {
+      border: 3px solid #f3f3f3; border-top: 3px solid white; border-radius: 50%;
+      width: 18px; height: 18px; animation: spin 1s linear infinite;
+      display: inline-block; vertical-align: middle; margin-right: 8px;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    #msg { margin-top: 25px; text-align: center; padding: 15px; border-radius: 10px; font-weight: bold; display: none; opacity: 1; transition: opacity 0.35s ease; }
+
+    .page-tip {
+      max-width: 850px; margin: 0 auto 14px; padding: 12px 14px; border-radius: 12px;
+      background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; font-size: 0.9rem; font-weight: 700;
+    }
+
+    .top-dock {
+      position: fixed;
+      left: 50%;
+      top: 10px;
+      transform: translateX(-50%);
+      width: min(calc(100% - 24px), 850px);
+      padding: 8px 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid rgba(203,213,224,0.95);
+      box-shadow: 0 10px 26px rgba(15,23,42,0.1);
+      backdrop-filter: blur(8px);
+      z-index: 3000;
+      box-sizing: border-box;
+    }
+
+    .top-nav {
+      display: flex; gap: 8px; flex-wrap: wrap; overflow-x: visible;
+      justify-content: center; align-items: center; width: 100%;
+      box-sizing: border-box; margin: 0; padding: 0;
+    }
+    .top-nav::-webkit-scrollbar { display: none; }
+    .top-nav a {
+      flex: 0 0 auto; white-space: nowrap; text-align: center; text-decoration: none;
+      color: #334155; background: #e2e8f0; border: 1px solid #cbd5e1;
+      padding: 7px 12px; border-radius: 999px; font-weight: 800; font-size: 13px;
+      transition: 0.2s;
+    }
+    .top-nav a.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+    .action-dock {
+      position: fixed;
+      left: 50%;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+      transform: translateX(-50%);
+      width: min(calc(100% - 24px), 850px);
+      padding: 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid rgba(203,213,224,0.95);
+      box-shadow: 0 10px 30px rgba(15,23,42,0.12);
+      backdrop-filter: blur(8px);
+      z-index: 3000;
+      box-sizing: border-box;
+    }
+    .action-dock #submit-btn { margin-top: 0; width: 100%; }
+
+    /* --- 確認視窗 CSS --- */
+    #confirmModal {
+      display: none; position: fixed; z-index: 9999;
+      left: 0; top: 0; width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.6);
+      align-items: center; justify-content: center;
+    }
+    .modal-content {
+      background-color: #fff; padding: 25px; border-radius: 16px;
+      width: 90%; max-width: 500px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      animation: slideDown 0.3s ease-out;
+    }
+    @keyframes slideDown {
+      from { transform: translateY(-30px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .confirm-list p {
+      margin: 8px 0; border-bottom: 1px dashed #eee;
+      padding-bottom: 8px; display: flex; justify-content: space-between;
+    }
+    .confirm-label { color: #64748b; font-weight: bold; }
+    .confirm-value { color: #1e293b; font-weight: 900; text-align: right; }
+    .confirm-total { 
+      background: #f0f9ff; padding: 15px; border-radius: 8px; 
+      color: #0369a1; font-weight: bold; text-align: center; margin-top: 15px; font-size: 1.1em;
+    }
+    .modal-actions { display: flex; gap: 15px; margin-top: 20px; }
+    .btn-cancel {
+      flex: 1; padding: 12px; border: 2px solid #cbd5e0; background: #fff; color: #64748b;
+      border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 0;
+    }
+    .btn-confirm {
+      flex: 1; padding: 12px; background: #2563eb; color: white; border: none;
+      border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 0;
+    }
+
+    @media (max-width: 600px) {
+      body { padding: 104px 12px 136px; }
+      .page-tip { font-size: 0.85rem; margin-bottom: 12px; }
+      .top-dock { width: calc(100% - 24px); }
+      .top-nav { max-width: 100%; }
+      .action-dock { width: calc(100% - 24px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-dock">
+    <div id="topNav" class="top-nav"></div>
+  </div>
+  <h1>「普平資糧功德海」</h1>
+  <div class="page-tip">先填捐贈資料，再確認總量與位置；若照片背景同步失敗，頁面會直接顯示原因。</div>
+  
+  <form id="donation-form">
+    <div class="grid-item">
+      <label>📅 捐贈日期：</label>
+      <input type="date" id="dDate" name="donationDate" required>
+    </div>
+    
+    <div class="grid-item">
+      <label>👤 來源/捐贈者：</label>
+      <input type="text" name="donorName" required placeholder="如：傅O、某某公司">
+    </div>
+    
+    <div class="grid-item">
+      <label>📦 物品名稱：</label>
+      <input type="text" name="itemName" id="itemName" required placeholder="如：巧克力條、豆腐">
+    </div>
+    
+    <div class="grid-item">
+      <label>🎨 顏色/規格(選填)：</label>
+      <input type="text" name="color" placeholder="如：無、藍色、大包裝">
+    </div>
+
+    <div class="grid-item">
+      <label>🔒 庫存屬性：</label>
+      <select name="itemStatus" id="itemStatus">
+        <option value="可用">✅ 一般物資 (可正常領用)</option>
+        <option value="供僧">☸️ 供僧 (預設凍結不顯示)</option>
+      </select>
+    </div>
+
+    <div class="grid-item">
+      <label>⚖️ 單位 (拆箱後)-選填：</label>
+      <input type="text" name="unit" id="unitInput" placeholder="請填寫拆箱後的單位，如：瓶、罐、包 (選填)">
+    </div>
+    
+    <div class="grid-span-2" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin: 10px 0;">
+      <label style="color: #1e293b; font-size: 1rem; margin-bottom: 12px; display: flex; align-items: center; gap: 5px;">
+        🔢 入庫規格與數量 
+        <span onclick="toggleHint()" style="cursor:pointer; color:#3b82f6; font-size:0.85em; text-decoration:underline; font-weight:normal;">
+          ℹ️ 填寫說明
+        </span>
+      </label>
+
+      <div id="clickHint" style="display: none; background: #ffffff; border: 1px solid #cbd5e0; padding: 12px; border-radius: 10px; margin-bottom: 15px; font-size: 0.85rem; color: #475569; line-height: 1.6; box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);">
+        • <b>散裝物品：</b>第一欄填「1」，第二欄填實際個數。<br>
+        • <b>整箱物品：</b>第一欄填「每箱幾入」(如12)，第二欄填「幾箱」。<br>
+        <small style="color: #94a3b8;">(系統將自動計算：數量 × 箱(盒、瓶、條)數 = 總計數量)</small>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div>
+          <label style="font-size: 0.85rem; color: #64748b;">每箱(盒)有幾個？</label>
+          <input type="number" name="unitRatio" min="1" required placeholder="如：10" style="background: white;">
+        </div>
+
+        <div>
+          <label style="font-size: 0.85rem; color: #64748b;">這次進了幾箱(盒)？</label>
+          <input type="number" name="quantity" min="1" required placeholder="如：2" style="background: white;">
+        </div>
+      </div>
+
+      <div id="totalPreview" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #cbd5e0; text-align: center;">
+        <div style="color: #475569; font-weight: 800; font-size: 0.95rem;">
+          📊 系統將記錄總數為：
+          <div style="margin-top: 5px;">
+            <span id="calcDetail" style="color: #94a3b8; font-weight: normal; font-size: 0.85rem;"></span>
+            <span style="color: #1e293b; margin: 0 5px;">=</span>
+            <span id="finalTotal" style="font-size: 1.4rem; color: #2563eb; border-bottom: 2px solid #2563eb;">0</span> 
+            <span id="finalUnit" style="font-weight:bold; color:#2563eb;">個</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-item">
+      <label>📍 存放位置：</label>
+      <input type="text" name="location" required placeholder="如：B1大寮、茶水間">
+    </div>
+    
+    <div class="grid-item">
+      <label>✍️ 經手人：</label>
+      <input type="text" name="handler" required placeholder="您的姓名">
+    </div>
+    
+    <div class="grid-item full-width" style="grid-column: span 2;">
+      <label>⌛ 有效期限 (不可早於今天)-選填：</label>
+      <input type="date" id="expiryDate" name="expiryDate">
+    </div>
+
+    <div class="photo-area">
+      <label style="color:#1e293b; font-weight:900;">📸 物品照片 (拍照或從相簿選擇)</label>
+      <input type="file" id="cameraInput" accept="image/*" style="margin-top:10px; border:none; padding:0; font-weight:normal;">
+      <div id="photoStatus" style="font-size: 0.85em; color: #718096; margin-top: 10px; font-weight:700;">未上傳照片</div>
+      <img id="previewImg" src="">
+      <input type="hidden" name="photoUrl" id="hiddenPhotoUrl">
+    </div>
+
+    <div class="grid-span-2">
+      <label>📝 備註事項(選填)：</label>
+      <input type="text" name="note" placeholder="如：中台申請用、法會預備">
+    </div>
+  </form>
+
+  <div id="msg"></div>
+
+  <div class="action-dock">
+    <button type="submit" form="donation-form" id="submit-btn">確認送出入庫</button>
+  </div>
+
+  <div id="confirmModal">
+    <div class="modal-content">
+      <h2 style="margin-top:0; color:#1e293b; text-align:center;">📋 入庫資料確認</h2>
+      <div id="confirmBody" class="confirm-list">
+        </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" onclick="closeModal()">🔙 返回修改</button>
+        <button type="button" class="btn-confirm" onclick="finalSubmit()">✅ 確認無誤，送出</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./gas-polyfill.js"></script>
+  <script>
+  // 安全擷取錯誤訊息
+  function getErrMsg(err) {
+    try {
+      if (!err) return '未知錯誤';
+      if (typeof err === 'string') return err;
+      if (err.message) return err.message;
+      if (err.toString) return err.toString();
+      return JSON.stringify(err);
+    } catch (e) { return '未知錯誤'; }
+  }
+
+  // XSS 防護：轉義使用者輸入
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // 取得今日日期字串 (YYYY-MM-DD)
+  function getToday() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  // LOG wrapper
+  window.DEBUG = window.DEBUG || false;
+  const LOG = { debug: (...a) => { if (window.DEBUG) console.log(...a); }, info: (...a) => { if (window.DEBUG) console.info(...a); }, error: (...a) => console.error(...a) };
+
+  // 1. 宣告全域變數
+  const form = document.getElementById('donation-form');
+  const btn = document.getElementById('submit-btn');
+  const msg = document.getElementById('msg');
+  const cameraInput = document.getElementById('cameraInput');
+  const previewImg = document.getElementById('previewImg');
+  const hiddenPhotoUrl = document.getElementById('hiddenPhotoUrl');
+  const photoStatus = document.getElementById('photoStatus');
+  let msgFadeTimer = null;
+  let msgCleanupTimer = null;
+
+  function setMsg(type, html, autoHideMs) {
+    clearTimeout(msgFadeTimer);
+    clearTimeout(msgCleanupTimer);
+
+    msg.style.display = "block";
+    msg.style.opacity = "1";
+
+    if (type === 'success') {
+      msg.style.background = "#f0fff4";
+      msg.style.color = "#2f855a";
+    } else if (type === 'warning') {
+      msg.style.background = "#fff9db";
+      msg.style.color = "#856404";
+    } else {
+      msg.style.background = "#fff5f5";
+      msg.style.color = "#c53030";
+    }
+
+    msg.innerHTML = html;
+
+    if (Number(autoHideMs) > 0) {
+      msgFadeTimer = setTimeout(() => {
+        msg.style.opacity = "0";
+        msgCleanupTimer = setTimeout(() => {
+          msg.style.display = "none";
+        }, 360);
+      }, Number(autoHideMs));
+    }
+  }
+
+  function toggleHint() {
+    const hint = document.getElementById('clickHint');
+    if (hint) {
+      hint.style.display = (hint.style.display === 'none') ? 'block' : 'none';
+    }
+  }
+
+  function focusToField(el) {
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => {
+      try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+    }, 120);
+  }
+
+  function focusAndReportFirstInvalid(formEl) {
+    if (!formEl) return false;
+    if (formEl.checkValidity()) return true;
+    const firstInvalid = formEl.querySelector('input:invalid, select:invalid, textarea:invalid');
+    if (firstInvalid) {
+      focusToField(firstInvalid);
+      firstInvalid.reportValidity();
+    }
+    return false;
+  }
+
+  window.onload = function() {
+    // 🔥 背景暖機：先建立總覽快取（不影響頁面）
+    google.script.run.withSuccessHandler(res => {
+      // 暖機成功/失敗都不影響使用流程
+      if (res && res.success) {
+        console.log('暖機完成，耗時(ms):', res.elapsedMs);
+      } else {
+        console.warn('暖機失敗:', res);
+      }
+    }).withFailureHandler(err => {
+      console.warn('暖機呼叫失敗:', err);
+    }).warmUpSummaryCache();
+
+    // A. 設定日期
+    const today = getToday();
+    const dDateInput = document.getElementById('dDate');
+    if (dDateInput) {
+      dDateInput.value = today;
+      dDateInput.setAttribute('min', today);
+    }
+    if (document.getElementById('expiryDate')) {
+      document.getElementById('expiryDate').setAttribute('min', today);
+    }
+
+    // B. 渲染導覽連結（靜態相對路徑，不再透過 API 取得部署網址）
+    const topNav = document.getElementById('topNav');
+    const navHtml = `
+      <a href="index.html" target="_top" class="active">🏠 主選單</a>
+      <a href="recent.html" target="_top">📋 最近捐贈</a>
+      <a href="near-expiry.html" target="_top">⏰ 即期品</a>
+      <a href="withdraw.html" target="_top">📤 領借用</a>
+      <a href="asset_return.html" target="_top">🔙 歸還</a>
+      <a href="asset_entry.html" target="_top">🛠️ 入庫</a>
+      <a href="inventory.html" target="_top">📊 總覽</a>
+    `;
+    if (topNav) topNav.innerHTML = navHtml;
+
+    // C. 即時計算預覽邏輯
+    const qtyIn = document.getElementsByName('quantity')[0];
+    const ratioIn = document.getElementsByName('unitRatio')[0];
+    const unitIn = document.getElementById('unitInput'); 
+    const previewBox = document.getElementById('totalPreview');
+    const finalUnitSpan = document.getElementById('finalUnit');
+
+    function updateCalc() {
+      const q = parseFloat(qtyIn.value) || 0;
+      const r = parseFloat(ratioIn.value) || 0;
+      // 預設單位顯示 "個"，如果有填就用填的
+      const u = (unitIn && unitIn.value) ? unitIn.value : "個";
+      
+      if (q > 0 && r > 0) {
+        if (previewBox) previewBox.style.display = 'block';
+        document.getElementById('calcDetail').innerText = q + " 箱/組 × (每箱 " + r + " " + u + ")";
+        document.getElementById('finalTotal').innerText = (q * r).toLocaleString();
+        
+        // 🌟 核心修正：直接顯示使用者填寫的單位 (不用 "入")
+        finalUnitSpan.innerText = u; 
+        
+      } else {
+        if (previewBox) previewBox.style.display = 'none';
+      }
+    }
+
+    [qtyIn, ratioIn, unitIn].forEach(el => {
+      if (el) el.addEventListener('input', updateCalc);
+    });
+  };
+
+  // 📸 照片處理
+  cameraInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) {
+      hiddenPhotoUrl.value = "";
+      previewImg.style.display = 'none';
+      photoStatus.textContent = "未上傳照片";
+      return;
+    }
+
+    btn.disabled = true; 
+    photoStatus.innerHTML = '<div class="loader" style="border-top-color:#718096"></div> 縮圖最佳化中...';
+    
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        const max_size = 400; 
+        let width = img.width, height = img.height;
+        
+        if (width > height) { 
+          if (width > max_size) { height *= max_size / width; width = max_size; } 
+        } else { 
+          if (height > max_size) { width *= max_size / height; height = max_size; } 
+        }
+        
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        previewImg.src = dataUrl;
+        previewImg.style.display = 'inline-block';
+        hiddenPhotoUrl.value = dataUrl;
+        
+        const kbSize = Math.round(dataUrl.length / 1024);
+        photoStatus.innerHTML = `✅ 照片已就緒 (約 ${kbSize} KB)`;
+        btn.disabled = false;
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // 🌟 表單送出 -> 開啟確認框
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    // 先檢查必填欄位，並自動跳到第一個未填欄位
+    if (!focusAndReportFirstInvalid(form)) {
+      return;
+    }
+    
+    // 基本驗證
+    const donation = document.getElementById('dDate').value;
+    const todayStr = getToday();
+    const expiry = document.getElementById('expiryDate').value;
+
+    if (donation < todayStr) {
+      const dDateEl = document.getElementById('dDate');
+      if (dDateEl) {
+        dDateEl.setCustomValidity('捐贈日期不可早於今天');
+        focusToField(dDateEl);
+        dDateEl.reportValidity();
+        dDateEl.setCustomValidity('');
+      }
+      return;
+    }
+    if (expiry && expiry < todayStr) {
+      const expiryEl = document.getElementById('expiryDate');
+      if (expiryEl) {
+        expiryEl.setCustomValidity('有效期限不可小於今天');
+        focusToField(expiryEl);
+        expiryEl.reportValidity();
+        expiryEl.setCustomValidity('');
+      }
+      return;
+    }
+
+    openConfirmModal();
+  });
+
+  // 🌟 開啟確認框
+  function openConfirmModal() {
+    const modal = document.getElementById('confirmModal');
+    const body = document.getElementById('confirmBody');
+    
+    const fData = new FormData(form);
+    const q = parseFloat(fData.get('quantity')) || 0;
+    const r = parseFloat(fData.get('unitRatio')) || 0;
+    const total = (q * r).toLocaleString();
+    const unit = fData.get('unit') || "個"; // 抓取使用者填寫的單位
+    
+    const esc = escapeHtml;
+    let html = `
+      <p><span class="confirm-label">📅 日期</span> <span class="confirm-value">${esc(fData.get('donationDate'))}</span></p>
+      <p><span class="confirm-label">👤 來源</span> <span class="confirm-value">${esc(fData.get('donorName'))}</span></p>
+      <p><span class="confirm-label">📦 品名</span> <span class="confirm-value">${esc(fData.get('itemName'))}</span></p>
+      
+      <p><span class="confirm-label">⚖️ 內容物單位</span> <span class="confirm-value">${esc(unit)}</span></p>
+      
+      <p><span class="confirm-label">📍 位置</span> <span class="confirm-value">${esc(fData.get('location'))}</span></p>
+      <p><span class="confirm-label">✍️ 經手</span> <span class="confirm-value">${esc(fData.get('handler'))}</span></p>
+      <p><span class="confirm-label">⌛ 有效日期</span> <span class="confirm-value">${fData.get('expiryDate') ? esc(fData.get('expiryDate')) : '未填寫'}</span></p>
+      <p><span class="confirm-label">📸 圖片上傳</span> <span class="confirm-value">${hiddenPhotoUrl.value ? '已上傳' : '未上傳'}</span></p>
+    `;
+
+    // 🌟 核心修正：確認視窗直接顯示使用者填寫的單位
+    html += `
+      <div class="confirm-total">
+         入庫總量： ${total} ${esc(unit)}<br>
+         <small style="font-weight:normal; color:#555">(${q} 箱 × 每箱 ${r} ${esc(unit)})</small>
+      </div>
+    `;
+    
+    if(hiddenPhotoUrl.value) {
+       html += `<div style="text-align:center; margin-top:10px;"><img src="${hiddenPhotoUrl.value}" style="max-height:100px; border-radius:8px; border:1px solid #ddd;"></div>`;
+    }
+
+    body.innerHTML = html;
+    modal.style.display = "flex";
+  }
+
+  // 🌟 關閉確認框
+  function closeModal() {
+    document.getElementById('confirmModal').style.display = "none";
+  }
+
+  // 🌟 最終送出
+  function finalSubmit() {
+    closeModal();
+    
+    btn.disabled = true;
+    btn.innerHTML = '<div class="loader"></div> 處理中...';
+    setMsg('warning', '⏳ 正在快傳文字資料...');
+    
+    const formData = Object.fromEntries(new FormData(form));
+    const photoData = hiddenPhotoUrl.value;
+
+    google.script.run
+      .withSuccessHandler(res => {
+        if(res.success) {
+          if (photoData) {
+            setMsg('success', `✅ 入庫成功！(分類：${res.category}) 📷 圖片同步中...`);
+          } else {
+            setMsg('success', `✅ 入庫成功！(分類：${res.category}) ✨ 已完成。`);
+          }
+          
+          // 重置邏輯
+          const h = formData.handler, d = formData.donorName, l = formData.location;
+          form.reset();
+          
+          if (document.getElementById('totalPreview')) {
+            document.getElementById('totalPreview').style.display = 'none';
+          }
+          
+          document.getElementById('dDate').value = getToday();
+          form.handler.value = h;
+          form.donorName.value = d;
+          form.location.value = l;
+          previewImg.style.display = 'none';
+          hiddenPhotoUrl.value = "";
+          photoStatus.textContent = "未上傳照片";
+          btn.disabled = false;
+          btn.textContent = "確認送出入庫";
+          form.itemName.focus();
+
+          if (photoData) {
+            google.script.run
+              .withSuccessHandler(photoRes => {
+                  if (photoRes && photoRes.success) {
+                    setMsg('success', `✅ 入庫成功！(分類：${res.category}) 📷 圖片已就緒。`);
+                  } else {
+                    const err = (photoRes && (photoRes.error || photoRes.message)) || '未知錯誤';
+                    setMsg('success', `✅ 入庫成功！(分類：${res.category}) ⚠️ 圖片同步失敗：${err}`);
+                  }
+              })
+              .withFailureHandler(err => {
+                setMsg('success', `✅ 入庫成功！(分類：${res.category}) ⚠️ 圖片背景同步失敗：${getErrMsg(err)}`);
+              })
+              .updatePhotoInBackground(res.row, photoData, formData.itemName, formData.color);
+          }
+        } else {
+          setMsg('error', "❌ 失敗：" + getErrMsg(res));
+          btn.disabled = false;
+          btn.textContent = "確認送出入庫";
+        }
+      })
+      .withFailureHandler(err => {
+        setMsg('error', "❌ 送出失敗：" + getErrMsg(err));
+        btn.disabled = false;
+        btn.textContent = "確認送出入庫";
+      })
+      .addDonationFast(formData);
+  }
+  </script>
+</body>
+</html>

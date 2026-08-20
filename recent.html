@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>最近捐贈紀錄</title>
+  <style>
+    body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; padding: 98px 20px 20px; line-height: 1.6; background-color: #f4f7f6; color: #333; max-width: 800px; margin: auto; }
+    h1 { color: #2c3e50; text-align: center; margin-bottom: 25px; }
+    ul { list-style: none; padding: 0; }
+    
+    li { 
+      background: white; margin-bottom: 15px; padding: 15px; 
+      border-left: 5px solid #4CAF50; border-radius: 10px; 
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+      display: flex; align-items: flex-start; gap: 15px;
+      transition: 0.3s; position: relative;
+    }
+    
+    /* 供僧物資的特殊邊框顏色（橘色） */
+    li.sangha-item { border-left-color: #f59e0b; }
+    li.out-of-stock { border-left-color: #94a3b8 !important; background-color: #f8fafc; opacity: 0.8; }
+    
+    .record-img { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; border: 1px solid #eee; cursor: zoom-in; flex-shrink: 0; }
+    .no-img { width: 80px; height: 80px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+
+    .content-box { flex-grow: 1; }
+
+    .skeleton { background: linear-gradient(110deg, #ececec 8%, #f5f5f5 18%, #ececec 33%); background-size: 200% 100%; animation: shine 1.5s linear infinite; height: 110px; border: none !important; margin-bottom: 15px; border-radius: 8px; }
+    @keyframes shine { to { background-position-x: -200%; } }
+
+    .cat-tag { background: #dcfce7; padding: 3px 10px; border-radius: 20px; font-size: 0.75em; color: #166534; margin-right: 8px; font-weight: bold; }
+    
+    /* 🚀 供僧專用標籤樣式 */
+    .sangha-badge { background: #fef3c7; color: #92400e; padding: 3px 10px; border-radius: 20px; font-size: 0.75em; font-weight: bold; border: 1px solid #fde68a; margin-right: 8px; }
+
+    .color-tag { color: #64748b; font-size: 0.9em; margin-left: 5px; background: #f1f5f9; padding: 1px 6px; border-radius: 4px; }
+    .meta { color: #475569; font-size: 0.85em; margin-top: 4px; }
+    .quantity-info { color: #0f172a; font-weight: bold; }
+    
+    .status-badge { position: absolute; bottom: 15px; right: 15px; font-size: 0.75em; padding: 4px 10px; border-radius: 6px; font-weight: bold; }
+    .badge-none { background: #fee2e2; color: #b91c1c; }
+    .badge-have { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+
+    .pagination-ctrl { display: flex; justify-content: center; align-items: center; gap: 12px; margin: 15px 0 5px; }
+    .btn-page { padding: 6px 12px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; font-weight: bold; cursor: pointer; }
+    .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+    #pageInfo { font-weight: 700; color: #475569; }
+
+    #image-modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; flex-direction: column; }
+    #modal-img { max-width: 90%; max-height: 80%; border-radius: 8px; border: 4px solid white; }
+
+    hr { border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0; }
+    .top-dock {
+      position: fixed;
+      left: 50%;
+      top: 10px;
+      transform: translateX(-50%);
+      width: min(calc(100% - 24px), 800px);
+      padding: 8px 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid rgba(203,213,224,0.95);
+      box-shadow: 0 10px 26px rgba(15,23,42,0.1);
+      backdrop-filter: blur(8px);
+      z-index: 900;
+      box-sizing: border-box;
+    }
+    .top-nav { display: flex; gap: 8px; flex-wrap: wrap; overflow-x: visible; justify-content: center; align-items: center; width: 100%; box-sizing: border-box; margin: 0; padding: 0; }
+    .top-nav::-webkit-scrollbar { display: none; }
+    .top-nav a { flex: 0 0 auto; white-space: nowrap; text-align: center; text-decoration: none; color: #334155; background: #e2e8f0; border: 1px solid #cbd5e1; padding: 7px 12px; border-radius: 999px; font-weight: 800; font-size: 13px; }
+    .top-nav a.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+
+    @media (max-width: 600px) {
+      body { padding: 104px 12px 12px; max-width: 100%; }
+      li { padding: 12px; gap: 10px; }
+      .record-img, .no-img { width: 64px; height: 64px; }
+      .top-dock { width: calc(100% - 24px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-dock">
+    <div id="topNav" class="top-nav"></div>
+  </div>
+  <h1>📋 最近捐贈紀錄（20 筆）</h1>
+
+  <ul id="list">
+    <li class="skeleton"></li>
+    <li class="skeleton"></li>
+    <li class="skeleton"></li>
+  </ul>
+
+  <div id="pager" class="pagination-ctrl" style="display:none;">
+    <button id="prevBtn" class="btn-page">上一頁</button>
+    <span id="pageInfo">第 1 / 1 頁</span>
+    <button id="nextBtn" class="btn-page">下一頁</button>
+  </div>
+
+  <div id="image-modal" onclick="this.style.display='none'">
+    <img id="modal-img" src="">
+    <p style="color:white; margin-top:15px; font-size: 0.9em;">(點擊任何處關閉)</p>
+  </div>
+
+  <script src="./gas-polyfill.js"></script>
+  <script>
+  // 👤 捐贈者加密：傅小明 -> 傅O明，傅明 -> 傅O
+function maskName(name) {
+  if (!name) return "匿名";
+  //if (name.length <= 1) return name;
+  //if (name.length === 2) return name[0] + "OO";
+  //return name[0] + "OO" + name[name.length - 1];
+  return name[0] + "OO";
+}
+
+// 📦 物品名稱加密：巧克力 -> 巧OO，泡麵 -> 泡O
+function maskItem(itemName) {
+  if (!itemName) return "***";
+  /*if (itemName.length <= 1) return itemName;
+  if (itemName.length === 2) return itemName[0] + "OO";
+  // 保留頭尾，中間遮罩
+  var middle = "O";
+  return itemName[0] + middle + itemName[itemName.length - 1];*/
+  return itemName[0] + "OO";
+}
+// 縮圖網址轉換（支援 Drive 連結）
+function getThumbUrl(url) {
+  if (!url) return "";
+  var src = String(url).trim();
+  if (src.indexOf('drive.google.com') > -1) {
+    var m = src.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    var m2 = src.match(/id=([a-zA-Z0-9_-]+)/);
+    var id = (m && m[1]) ? m[1] : ((m2 && m2[1]) ? m2[1] : "");
+    if (id) return 'https://drive.google.com/thumbnail?id=' + id + '&sz=w400';
+  }
+  return src;
+}
+// 小工具：安全擷取錯誤訊息
+function getErrMsg(err) {
+  try {
+    if (!err) return '未知錯誤';
+    if (typeof err === 'string') return err;
+    if (err.message) return err.message;
+    if (err.toString) return err.toString();
+    return JSON.stringify(err);
+  } catch (e) { return '未知錯誤'; }
+}
+let recentItems = [];
+let currentPage = 1;
+const pageSize = 5;
+let stockMap = new Map();
+
+function updatePager(total) {
+  const pager = document.getElementById('pager');
+  const pageInfo = document.getElementById('pageInfo');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  if (total === 0) {
+    pager.style.display = 'none';
+    return;
+  }
+  pager.style.display = 'flex';
+  pageInfo.textContent = '第 ' + currentPage + ' / ' + totalPages + ' 頁';
+  prevBtn.disabled = (currentPage <= 1);
+  nextBtn.disabled = (currentPage >= totalPages);
+}
+
+function renderPage() {
+  var ul = document.getElementById('list');
+  if (!ul) return;
+  if (recentItems.length === 0) {
+    ul.innerHTML = '<li style="text-align:center; border:none; color:#64748b;">📭 目前尚無任何捐贈紀錄</li>';
+    updatePager(0);
+    return;
+  }
+
+  const start = (currentPage - 1) * pageSize;
+  const pageItems = recentItems.slice(start, start + pageSize);
+  var fragment = document.createDocumentFragment();
+
+  pageItems.forEach(function(d) {
+    var li = document.createElement('li');
+
+    var displayItem = maskItem(d.itemName);
+    var displayDonor = maskName(d.donorName);
+
+    var isSangha = (d.stockStatus === '供僧專用' || d.stockStatus === '供僧');
+    var itemKey = d.itemName + (d.color && d.color !== '無' ? ' (' + d.color + ')' : '');
+    var currentQty = stockMap.get(itemKey) || 0;
+    var isOut = currentQty <= 0;
+
+    if (isOut) li.classList.add('out-of-stock');
+    if (isSangha) li.classList.add('sangha-item');
+
+    var photoUrl = getThumbUrl(d.photoUrl || "");
+    var isValidImg = (photoUrl.indexOf('http') === 0 || photoUrl.indexOf('data:image') === 0);
+
+    if (isValidImg) {
+      var imgEl = document.createElement('img');
+      imgEl.className = 'record-img';
+      imgEl.loading = 'lazy';
+      imgEl.src = photoUrl;
+      imgEl.onclick = function() { zoomImg(photoUrl); };
+
+      var placeholder = document.createElement('div');
+      placeholder.className = 'no-img';
+      placeholder.style.display = 'none';
+      placeholder.textContent = isSangha ? '☸️' : '📦';
+
+      imgEl.onerror = function() {
+        imgEl.style.display = 'none';
+        placeholder.style.display = 'flex';
+      };
+
+      li.appendChild(imgEl);
+      li.appendChild(placeholder);
+    } else {
+      var noImg = document.createElement('div');
+      noImg.className = 'no-img';
+      noImg.textContent = isSangha ? '☸️' : '📦';
+      li.appendChild(noImg);
+    }
+
+    var content = document.createElement('div');
+    content.className = 'content-box';
+    content.innerHTML =
+      '<div class="status-badge ' + (isOut ? 'badge-none' : 'badge-have') + '">' +
+        (isOut ? '✓ 已領罄' : '● 餘額：' + currentQty + ' ' + (d.unit || '個')) +
+      '</div>' +
+      '<div>' +
+        '<span class="cat-tag">' + (d.category || '未分類') + '</span>' +
+        (isSangha ? '<span class="sangha-badge">☸️ 供僧</span>' : '') +
+        '<strong>' + displayItem + '</strong>' + (d.color && d.color !== '無' ? '<span class="color-tag">' + d.color + '</span>' : '') +
+      '</div>' +
+      '<div class="meta">入庫日期：' + d.donationDate + '</div>' +
+      '<div class="meta">當時入庫：<span class="quantity-info">' + d.quantity + ' ' + d.unit + '</span></div>' +
+      '<div class="meta">來源：' + displayDonor + ' | 存放：' + (d.location || '未標註') + '</div>';
+
+    li.appendChild(content);
+    fragment.appendChild(li);
+  });
+
+  ul.innerHTML = '';
+  ul.appendChild(fragment);
+  updatePager(recentItems.length);
+}
+
+function loadData() {
+  var ul = document.getElementById('list');
+  if (!ul) return;
+  
+  ul.innerHTML = '<li style="text-align:center; border:none;">⌛ 正在同步雲端大數據...</li>';
+
+  google.script.run.withSuccessHandler(function(res) {
+    if (!res || !res.success) {
+      ul.innerHTML = '<li style="border-left-color: #ef4444; color: #b91c1c;">❌ 載入失敗：' + getErrMsg(res) + '</li>';
+      updatePager(0);
+      return;
+    }
+
+    stockMap = new Map();
+    res.inventory.forEach(function(item) {
+      var key = item.name + (item.color && item.color !== '無' ? ' (' + item.color + ')' : "");
+      stockMap.set(key, item.qty);
+    });
+
+    recentItems = res.recent || [];
+    currentPage = 1;
+    renderPage();
+  }).withFailureHandler(function(err) {
+    ul.innerHTML = '<li style="border-left-color: #ef4444; color: #b91c1c;">❌ 載入失敗：' + getErrMsg(err) + '</li>';
+    updatePager(0);
+  }).getRecentDonationsLite(20); 
+}
+
+document.getElementById('prevBtn').onclick = function() {
+  if (currentPage > 1) { currentPage--; renderPage(); }
+};
+document.getElementById('nextBtn').onclick = function() {
+  const totalPages = Math.max(1, Math.ceil(recentItems.length / pageSize));
+  if (currentPage < totalPages) { currentPage++; renderPage(); }
+};
+
+    function zoomImg(src) {
+      const modal = document.getElementById('image-modal');
+      const modalImg = document.getElementById('modal-img');
+      modalImg.src = src;
+      modal.style.display = 'flex';
+    }
+
+    loadData();
+
+    function renderTopNav() {
+      const items = [
+        { key: 'index',        label: '🏠 主選單' },
+        { key: 'recent',       label: '📋 最近捐贈' },
+        { key: 'near-expiry',  label: '⏰ 即期品' },
+        { key: 'withdraw',     label: '📤 領借用' },
+        { key: 'asset_return', label: '🔙 歸還' },
+        { key: 'asset_entry',  label: '🛠️ 入庫' },
+        { key: 'inventory',    label: '📊 總覽' }
+      ];
+      document.getElementById('topNav').innerHTML = items
+        .map(it => `<a class="${it.key === 'recent' ? 'active' : ''}" target="_top" href="${it.key}.html">${it.label}</a>`)
+        .join('');
+    }
+
+    renderTopNav();
+  </script>
+</body>
+</html>

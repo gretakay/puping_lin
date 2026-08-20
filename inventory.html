@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>庫存資產總覽 - 完整功能匯出版</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root { --primary: #3b82f6; --success: #10b981; --warning: #f59e0b; --danger: #ef4444; --gray: #64748b; --bg: #f8fafc; --sangha: #f97316; }
+    body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; padding: 98px 15px 15px; background-color: var(--bg); color: #1e293b; margin: auto; max-width: 950px; line-height: 1.5; }
+    h1 { color: #0f172a; text-align: center; font-size: 1.6rem; margin-bottom: 20px; font-weight: 800; }
+    
+    /* 儀表板 */
+    .dashboard { display: grid; grid-template-columns: 1.2fr 1fr; gap: 15px; margin-bottom: 20px; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+    .chart-box { height: 180px; position: relative; }
+
+    /* 分類標籤：橫向滑動 */
+    .category-scroll { 
+      display: flex; gap: 8px; overflow-x: auto; padding: 5px 2px 15px 2px; margin-bottom: 10px; 
+      scrollbar-width: none; -webkit-overflow-scrolling: touch; 
+    }
+    .category-scroll::-webkit-scrollbar { display: none; }
+    .cat-btn { 
+      white-space: nowrap; padding: 8px 16px; border-radius: 20px; background: white; color: var(--gray); 
+      font-size: 13px; font-weight: 800; cursor: pointer; border: 1.5px solid #e2e8f0; transition: 0.2s; flex-shrink: 0; 
+    }
+    .cat-btn span { margin-left: 5px; opacity: 0.5; font-size: 11px; }
+    .cat-btn.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+
+    /* 匯出按鈕區 */
+    .export-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .btn-export { flex: 1; min-width: 150px; padding: 12px; color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; transition: 0.3s; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; }
+    .export-all { background: #64748b; }
+    .export-asset { background: #3b82f6; }
+    .export-inventory { background: #10b981; }
+    .sync-rules { background: #475569; }
+    .btn-export:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-export:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
+    /* 區間匯出卡片 */
+    .tx-range-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 12px;
+      margin: -4px 0 16px;
+    }
+    .tx-range-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr minmax(180px, auto);
+      gap: 10px;
+      align-items: end;
+    }
+    .tx-field label {
+      display: block;
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+    .tx-date-input { padding: 10px 12px; }
+    .tx-export-btn { min-width: 200px; }
+
+    /* 搜尋與篩選 */
+    .search-filter-container { display: grid; grid-template-columns: 1.5fr 1fr; gap: 12px; margin-bottom: 20px; }
+    .search-input { width: 100%; padding: 12px 12px 12px 40px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 15px; box-sizing: border-box; outline: none; }
+    .filter-select { width: 100%; padding: 10px; border: 2px solid #3b82f6; border-radius: 12px; font-size: 14px; background: white; font-weight: bold; cursor: pointer; }
+
+    /* 頁籤 */
+    .tabs { display: flex; gap: 8px; margin-bottom: 0; padding: 0 10px; }
+    .tab { padding: 10px 20px; cursor: pointer; font-weight: bold; color: var(--gray); border-radius: 12px 12px 0 0; background: #e2e8f0; transition: 0.3s; font-size: 14px; }
+    .tab.active { color: white; background: #1e293b; }
+    .tab-content { display: none; background: white; padding: 15px; border-radius: 0 12px 12px 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow-x: auto; }
+    .tab-content.active { display: block; }
+
+    /* 表格 */
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 650px; table-layout: fixed; }
+    th { text-align: left; background: #f8fafc; padding: 12px 8px; color: var(--gray); border-bottom: 2px solid #edf2f7; }
+    td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; word-wrap: break-word; }
+    .col-img { width: 60px; }
+    .col-id { width: 130px; } /* 稍微拉寬以容納編號範圍 */
+    .col-status { width: 95px; }
+
+    .item-img { width: 45px; height: 45px; border-radius: 8px; object-fit: cover; border: 1px solid #eee; cursor: zoom-in; }
+    .status-badge { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+    .status-in { background: #dcfce7; color: #166534; }
+    .status-out { background: #fff7ed; color: #9a3412; }
+    .status-danger { background: #fee2e2; color: #991b1b; }
+
+    .pagination { display: flex; justify-content: center; gap: 15px; margin-top: 20px; align-items: center; }
+    .page-btn { padding: 6px 12px; border: 1.5px solid #e2e8f0; background: white; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    .top-dock {
+      position: fixed;
+      left: 50%;
+      top: 10px;
+      transform: translateX(-50%);
+      width: min(calc(100% - 24px), 950px);
+      padding: 8px 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid rgba(203,213,224,0.95);
+      box-shadow: 0 10px 26px rgba(15,23,42,0.1);
+      backdrop-filter: blur(8px);
+      z-index: 900;
+      box-sizing: border-box;
+    }
+    .top-nav { display: flex; gap: 8px; flex-wrap: wrap; overflow-x: visible; justify-content: center; align-items: center; width: 100%; box-sizing: border-box; margin: 0; padding: 0; }
+    .top-nav::-webkit-scrollbar { display: none; }
+    .top-nav a { flex: 0 0 auto; white-space: nowrap; text-align: center; text-decoration: none; color: #334155; background: #e2e8f0; border: 1px solid #cbd5e1; padding: 7px 12px; border-radius: 999px; font-weight: 800; font-size: 13px; }
+    .top-nav a.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+    .page-tip { margin: -6px 0 16px; padding: 10px 12px; border-radius: 12px; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; font-size: 0.88rem; font-weight: 700; }
+    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 80px auto; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    #image-modal { 
+      display: none; position: fixed; z-index: 9999; left: 0; top: 0; 
+      width: 100%; height: 100%; background: rgba(0,0,0,0.9); 
+      align-items: center; justify-content: center; flex-direction: column;
+      cursor: zoom-out;
+    }
+
+    @media (max-width: 600px) {
+      body { padding: 104px 12px 12px; max-width: 100%; }
+      .dashboard { grid-template-columns: 1fr; padding: 16px; }
+      .export-container { gap: 8px; }
+      .btn-export { min-width: 100%; }
+      .tx-range-card { padding: 10px; margin: 0 0 12px; }
+      .tx-range-grid { grid-template-columns: 1fr; gap: 8px; }
+      .tx-export-btn { width: 100%; min-width: 0; }
+      .search-filter-container { grid-template-columns: 1fr; }
+      .tabs { padding: 0; overflow-x: auto; }
+      .tab { flex: 0 0 auto; white-space: nowrap; }
+      .page-tip { font-size: 0.82rem; margin-bottom: 12px; }
+      .top-dock { width: calc(100% - 24px); }
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="top-dock">
+    <div id="topNav" class="top-nav" style="display:none;"></div>
+  </div>
+  <div id="loading-overlay"><div class="spinner"></div><p style="text-align:center; font-weight:bold; color:var(--gray);">正在解析資產數據並同步篩選器...</p></div>
+
+  <div id="main-ui" style="display:none;">
+    <h1>📊 庫存資產總覽</h1>
+    <div class="page-tip">可用搜尋、分類與頁籤切換查看資料；若某段資料同步失敗，頁面會直接指出是哪個載入來源出錯。</div>
+    <div class="dashboard">
+      <div>
+        <h4 style="margin:0 0 10px 0; font-size: 0.9rem; color: var(--gray);">🛠️ 資產狀態比例</h4>
+        <div class="chart-box"><canvas id="inventoryChart"></canvas></div>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <div style="background:#eff6ff; padding:15px; border-radius:12px; border-left: 5px solid var(--primary);">
+          <small style="color:var(--primary); font-weight:bold;">資產在庫</small><br><strong id="asset-in-count" style="font-size:1.4rem">0</strong>
+        </div>
+        <div style="background:#fff7ed; padding:15px; border-radius:12px; border-left: 5px solid var(--warning);">
+          <small style="color:#9a3412; font-weight:bold;">借出/維修/領用</small><br><strong id="asset-out-count" style="color:#ea580c; font-size:1.4rem">0</strong>
+          <div style="margin-top:6px; color:#7c2d12; font-size:12px; line-height:1.5; font-weight:700;">借出 <span id="asset-borrow-count">0</span> / 維修 <span id="asset-repair-count">0</span> / 領用 <span id="asset-consume-count">0</span></div>
+        </div>
+        <div style="background:#fee2e2; padding:15px; border-radius:12px; border-left: 5px solid var(--danger); grid-column: span 2;">
+          <small style="color:var(--danger); font-weight:bold;">損耗/遺失累計</small><br><strong id="asset-scrap-count" style="color:var(--danger); font-size:1.2rem">0</strong>
+          <div style="margin-top:6px; color:#991b1b; font-size:12px; line-height:1.5; font-weight:700;">毀損 <span id="asset-damage-count">0</span> / 遺失 <span id="asset-loss-count">0</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="export-container">
+      <button id="btn-refresh-data" class="btn-export" style="background:#10b981;" onclick="refreshAllData()">🔄 重新整理數據</button>
+      <button id="btn-export-asset" class="btn-export export-asset" onclick="exportReport('asset')">📥 匯出資產清冊</button>
+      <button id="btn-export-inventory" class="btn-export export-inventory" onclick="exportReport('inventory')">📥 匯出十方供養物彙整</button>
+      <button id="btn-export-all" class="btn-export export-all" onclick="exportReport('all')">📥 匯出目前過濾結果</button>
+      <button id="btn-sync-rules" class="btn-export sync-rules" onclick="manualSync()">🔄 同步 Excel 分類規則</button>
+    </div>
+
+    <div class="tx-range-card">
+      <div class="tx-range-grid">
+      <div class="tx-field">
+        <label for="txStartDate">交易起日</label>
+        <input id="txStartDate" type="date" class="search-input tx-date-input" />
+      </div>
+      <div class="tx-field">
+        <label for="txEndDate">交易迄日</label>
+        <input id="txEndDate" type="date" class="search-input tx-date-input" />
+      </div>
+      <button id="btn-export-range" class="btn-export export-all tx-export-btn" onclick="exportTxRange()">📄 匯出區間領借用歸還</button>
+      </div>
+    </div>
+
+    <div class="search-filter-container">
+      <div style="position:relative;">
+        <span style="position:absolute; left:12px; top:12px; color:var(--gray);">🔍</span>
+        <input type="text" id="globalSearch" class="search-input" placeholder="搜尋品名、編號、位置(如:照客)..." oninput="debouncedProcess()">
+        <div style="font-size:12px; color:var(--gray); margin-top:6px; padding-left:2px;">💡 提示：至少輸入 2 個字才啟用關鍵字搜尋；1 個字時顯示全部資料。</div>
+      </div>
+      <select id="statusFilter" class="filter-select" onchange="resetPager(); processData()">
+        <option value="all">🌐 全部狀態顯示</option>
+        <option value="borrowed">📤 借出中項目</option>
+        <option value="consumed">📦 已領用項目</option>
+        <option value="scrap">❌ 損耗/遺失</option>
+        <option value="repair">🛠️ 待維修中</option>
+        <option value="sangha">☸️ 供僧專用 (十方供養物)</option>
+        <option value="expiry">⏰ 即期品 (十方供養物)</option>
+      </select>
+    </div>
+
+    <div class="tabs">
+      <div id="tab-inv-btn" class="tab active" onclick="switchTab('consumable')">📦 十方供養物彙整</div>
+      <div id="tab-ast-btn" class="tab" onclick="switchTab('asset')">🛠️ 固定資產清冊</div>
+    </div>
+
+    <div id="consumable-content" class="tab-content active">
+      <div id="invCategoryBox" class="category-scroll"></div>
+      <div id="inv-container"></div>
+      <div class="pagination" id="invPager"></div>
+    </div>
+
+    <div id="asset-content" class="tab-content">
+      <div id="assetCategoryBox" class="category-scroll"></div>
+      <table>
+        <thead>
+          <tr>
+            <th class="col-img">照片</th>
+            <th class="col-id">編號範圍</th>
+            <th>品名規格 (數量)</th>
+            <th>存放位置</th>
+            <th class="col-status">狀態</th>
+          </tr>
+        </thead>
+        <tbody id="assetBody"></tbody>
+      </table>
+      <div class="pagination" id="assetPager"></div>
+    </div>
+  </div>
+
+  <div id="image-modal" onclick="this.style.display='none'">
+    <img id="modal-img" src="" style="max-width:90%; max-height:80%; border-radius:12px; border: 3px solid white;">
+    <p style="color:white; margin-top:15px; font-weight:bold;">( 點擊任何處關閉 )</p>
+  </div>
+
+  <div style="text-align:center; margin-top:30px; padding-bottom:40px;">
+  </div>
+
+  <script src="./gas-polyfill.js"></script>
+  <script>
+    let rawInventory = [], rawAssetsFull = [], expiryList = [];
+    let myChart = null;
+    let invPage = 1, assetPage = 1;
+    let invCat = "全部", assetCat = "全部";
+    let activeTab = 'consumable';
+    const invPageSize = 8, assetPageSize = 10;
+    
+    // 🔥 资产分页加载状态
+    let assetsCurrentPage = 1;
+    let assetsTotalPages = 0;
+    const MIN_SEARCH_CHARS = 2;
+    const ASSET_FETCH_PAGE_SIZE = 180;
+
+    // 預處理快取：避免每次輸入都重建 search 字串與映射
+    let preparedSig = '';
+    let preparedInv = [];
+    let preparedAssetsCombined = [];
+    let groupedAssetsCacheKey = '';
+    let groupedAssetsCacheData = [];
+
+    function buildPreparedData() {
+      const scrapRecent = window.scrapRecent || [];
+      const sig = [
+        rawInventory.length,
+        rawAssetsFull.length,
+        scrapRecent.length,
+        String(lastDataVersion || ''),
+        String(window.scrapTxTotal || 0)
+      ].join('|');
+
+      if (preparedSig === sig) return;
+
+      preparedInv = rawInventory.map(i => {
+        const cat = i.category || '一般';
+        return Object.assign({}, i, {
+          _cat: cat,
+          _search: `${i.name || ''} ${i.location || ''} ${cat}`.toLowerCase()
+        });
+      });
+
+      const idToCategory = {};
+      rawAssetsFull.forEach(a => {
+        const cat = a.category || '一般';
+        const ids = Array.isArray(a.ids) ? a.ids : (a.id ? [a.id] : []);
+        ids.forEach(x => { if (x) idToCategory[String(x)] = cat; });
+      });
+
+      const preparedAssets = rawAssetsFull.map(a => {
+        const cat = a.category || '一般';
+        const ids = Array.isArray(a.ids) ? a.ids : (a.id ? [a.id] : []);
+        const idsStr = ids.map(x => String(x)).join(' ');
+        const keeper = a.keeper || '';
+        return Object.assign({}, a, {
+          _cat: cat,
+          _search: `${a.name || ''} ${idsStr} ${a.location || ''} ${keeper} ${cat}`.toLowerCase()
+        });
+      });
+
+      const scrapMappedPrepared = scrapRecent.map(s => {
+        const ids = s.id ? [String(s.id)] : [];
+        const cat = (ids.length > 0 && idToCategory[ids[0]]) ? idToCategory[ids[0]] : '一般';
+        const item = {
+          name: s.name || '',
+          spec: '',
+          color: '',
+          status: s.status || '毀損報廢',
+          count: Number(s.qty) || 0,
+          ids: ids,
+          location: s.location || '',
+          photoUrl: '',
+          category: cat,
+          source: 'scrap_tx'
+        };
+        const idsStr = ids.join(' ');
+        item._cat = cat;
+        item._search = `${item.name} ${idsStr} ${item.location} ${cat}`.toLowerCase();
+        return item;
+      });
+
+      preparedAssetsCombined = preparedAssets.concat(scrapMappedPrepared);
+      preparedSig = sig;
+    }
+
+    // 🚀 優化：防抖動函式 (避免搜尋時頻繁運算造成卡頓)
+    function debounce(func, delay) {
+      let timer;
+      return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => func.apply(this, args), delay);
+      };
+    }
+
+    // 🚀 建立一個延遲執行的 processData 版本 (延遲 300ms)
+    // 這就是等一下 HTML input 要呼叫的函式
+    const debouncedProcess = debounce(() => {
+        resetPager();
+        processData();
+    }, 300);
+    // 🟢 小工具：將 Google Drive 連結轉為縮圖格式（減少載入時間）
+    function getThumbUrl(url) {
+      if (!url || typeof url !== 'string') return url;
+      if (url.indexOf('drive.google.com') > -1) {
+        try {
+          const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+          if (match && match[1]) {
+            return 'https://drive.google.com/thumbnail?id=' + match[1] + '&sz=w400';
+          }
+        } catch(e) {}
+      }
+      return url;
+    }
+
+    // 🟢 小工具：自動辨識 http 或 Base64 圖片，並轉為縮圖
+    function getSafeImgSrc(url) {
+      if (!url || url === "" || url === "無照片" || url.indexOf("⏳") > -1) return null;
+      // 將 Drive URL 轉為縮圖格式
+      return getThumbUrl(url);
+    }
+
+    // 小工具：安全擷取錯誤訊息，避免 err 為 null 時直接讀取 err.message 導致例外
+    function getErrMsg(err) {
+      try {
+        if (!err) return '未知錯誤';
+        if (typeof err === 'string') return err;
+        if (err.message) return err.message;
+        if (err.cause && err.cause.message) return err.cause.message;
+        if (err.toString) return err.toString();
+        return JSON.stringify(err);
+      } catch (e) { return '未知錯誤'; }
+    }
+
+    // LOG wrapper: set window.DEBUG = true in console to enable debug logs
+    window.DEBUG = window.DEBUG || false;
+    const LOG = {
+      debug: (...args) => { if (window.DEBUG) console.log(...args); },
+      info: (...args) => { if (window.DEBUG) console.info(...args); },
+      warn: (...args) => { console.warn(...args); },
+      error: (...args) => { console.error(...args); }
+    };
+    function resetPager() { invPage = 1; assetPage = 1; }
+
+    // 🔥 按需加载报废详细数据
+    let scrapDetailsLoaded = false;
+    let scrapDetailsLoading = false;  // 防止重复加载
+    function loadScrapDetailsIfNeeded() {
+      if (scrapDetailsLoaded || scrapDetailsLoading) return;  // 已加载或正在加载，跳过
+      
+      scrapDetailsLoading = true;
+      scrapDetailsLoaded = true;
+      
+      // 显示加载提示
+      document.getElementById('loading-overlay').style.display = 'flex';
+      document.querySelector('#loading-overlay p').innerText = '🔄 正在載入報廢記錄...';
+      
+      LOG.info("🔄 开始加载完整报废记录...");
+      
+      google.script.run.withSuccessHandler(res => {
+        scrapDetailsLoading = false;
+        document.getElementById('loading-overlay').style.display = 'none';
+        
+        // 详细调试：打印收到的响应
+        console.log("📥 收到报废数据响应:", res);
+        console.log("📊 响应类型:", typeof res);
+        console.log("🔍 res.success =", res ? res.success : 'res is null/undefined');
+        console.log("🔍 res.success 类型 =", res && res.success ? typeof res.success : 'N/A');
+        
+        if (res && res.success === true) {
+          window.scrapRecent = res.scrapRecent || [];
+          console.log("✅ 报废详细数据加载成功：" + window.scrapRecent.length + " 条记录");
+          processData();  // 重新渲染
+        } else {
+          const errMsg = (res && res.message) ? res.message : '未知錯誤';
+          console.warn("⚠️ 报废详细数据加载失败：" + errMsg);
+          console.warn("完整响应对象：", JSON.stringify(res));
+          alert("⚠️ 報廢數據載入失敗\n\n錯誤訊息：" + errMsg + "\n\n請檢查 Apps Script 日誌或聯繫系統管理員。\n\n完整響應：" + JSON.stringify(res));
+          processData();  // 仍然渲染现有数据
+        }
+      }).withFailureHandler(err => {
+        scrapDetailsLoading = false;
+        document.getElementById('loading-overlay').style.display = 'none';
+        console.error("❌ 报废详细数据加载错误：" + getErrMsg(err));
+        alert("❌ 報廢數據載入錯誤：" + getErrMsg(err));
+        processData();  // 仍然渲染现有数据
+      }).getScrapDetails();
+    }
+
+    function manualSync() {
+      const btn = document.getElementById('btn-sync-rules');
+      if (!btn) return;
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '⌛ 正在同步中...';
+      google.script.run.withSuccessHandler(res => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        alert("✅ 規則同步成功！\n系統已載入 Excel 中的最新分類設定。");
+        resetPager();
+        loadData(); 
+      }).withFailureHandler(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        alert("❌ 同步失敗：" + getErrMsg(err));
+      }).syncRulesFromSheet(); 
+      // 強制重新抓取資料避免快取干擾
+      setTimeout(() => loadData(true), 2000);
+    }
+
+    function setRefreshButtonState(loading, text) {
+      const btn = document.getElementById('btn-refresh-data');
+      if (!btn) return;
+      btn.disabled = !!loading;
+      btn.innerHTML = text || '🔄 重新整理數據';
+    }
+
+    function runAssetLocationSync(onDone) {
+      setRefreshButtonState(true, '⌛ 同步櫃位中...');
+      const runner = google.script.run.withSuccessHandler(res => {
+        if (res && res.success) {
+          if (typeof onDone === 'function') onDone(true, res);
+          return;
+        }
+        const errMsg = (res && res.message) ? res.message : '同步回傳失敗';
+        if (typeof onDone === 'function') onDone(false, { message: errMsg, raw: res });
+      }).withFailureHandler(err => {
+        if (typeof onDone === 'function') onDone(false, { message: getErrMsg(err), raw: err });
+      });
+
+      // 相容舊部署：若新函式尚未部署，退回既有全量修復流程，避免前端直接 TypeError。
+      if (typeof runner.syncAssetSheetLocationsAndCaches === 'function') {
+        runner.syncAssetSheetLocationsAndCaches();
+        return;
+      }
+
+      if (typeof runner.hardRefreshAllCachesAndIndexes === 'function') {
+        runner.hardRefreshAllCachesAndIndexes();
+        return;
+      }
+
+      if (typeof onDone === 'function') {
+        onDone(false, { message: '後端尚未部署同步函式（syncAssetSheetLocationsAndCaches）' });
+      }
+    }
+
+    function manualSyncAssetLocations() {
+      runAssetLocationSync((ok, res) => {
+        if (!ok) {
+          setRefreshButtonState(false, '🔄 重新整理數據');
+          alert('❌ 櫃位同步失敗：' + (res && res.message ? res.message : '未知錯誤'));
+          return;
+        }
+
+        setRefreshButtonState(true, '⌛ 前端重抓最新數據...');
+        loadData(true, 1, {
+          successMessage: '✅ 櫃位同步完成，並已更新前端資料',
+          onDone: function(okLoad) {
+            setRefreshButtonState(false, '🔄 重新整理數據');
+            if (!okLoad) {
+              alert('⚠️ 櫃位同步成功，但前端重抓失敗，請稍後再試。');
+            }
+          }
+        });
+      });
+    }
+
+    function syncDataVersionFromServer(onDone) {
+      google.script.run.withSuccessHandler(v => {
+        lastDataVersion = String(v || '0');
+        if (typeof onDone === 'function') onDone(true);
+      }).withFailureHandler(() => {
+        if (typeof onDone === 'function') onDone(false);
+      }).getDataVersion();
+    }
+
+    function runDeepRefresh() {
+      // 重置报废数据加载状态
+      scrapDetailsLoaded = false;
+      scrapDetailsLoading = false;
+
+      setRefreshButtonState(true, '⌛ 後端全量修復中...');
+      google.script.run.withSuccessHandler(res => {
+        setRefreshButtonState(true, '⌛ 前端重抓最新數據...');
+        loadData(true, 1, {
+          successMessage: '✅ 已完成全量修復與資料更新！',
+          onDone: function(ok) {
+            setRefreshButtonState(false, '🔄 重新整理數據');
+            if (ok) {
+              lastDataVersion = String((res && res.dataVersion) || lastDataVersion || '0');
+            } else {
+              alert('❌ 全量修復完成，但前端重抓失敗，請稍後再試。');
+            }
+          }
+        });
+      }).withFailureHandler(err => {
+        setRefreshButtonState(false, '🔄 重新整理數據');
+        alert('❌ 後端全量修復失敗：' + getErrMsg(err));
+      }).hardRefreshAllCachesAndIndexes();
+    }
+
+    // 🔥 刷新全部数据：先快速刷新；失敗時再詢問是否做全量修復
+    function refreshAllData() {
+      const btn = document.getElementById('btn-refresh-data');
+      if (btn && btn.disabled) return;
+
+      scrapDetailsLoaded = false;
+      scrapDetailsLoading = false;
+      runAssetLocationSync((syncOk, syncRes) => {
+        if (!syncOk) {
+          setRefreshButtonState(false, '🔄 重新整理數據');
+          const continueRefresh = confirm('⚠️ 櫃位同步失敗，是否仍繼續進行一般刷新？\n\n錯誤：' + (syncRes && syncRes.message ? syncRes.message : '未知錯誤'));
+          if (!continueRefresh) return;
+        }
+
+        setRefreshButtonState(true, '⌛ 快速刷新中...');
+        loadData(false, 1, {
+          silent: true,
+          onDone: function(ok) {
+            setRefreshButtonState(false, ok ? '✅ 已更新' : '🔄 重新整理數據');
+            if (ok) {
+              setTimeout(() => setRefreshButtonState(false, '🔄 重新整理數據'), 1200);
+            }
+            if (ok) {
+              syncDataVersionFromServer();
+              return;
+            }
+
+            const needDeep = confirm('⚠️ 快速刷新失敗，是否改用全量修復？\n（較慢，約 20-40 秒）');
+            if (needDeep) runDeepRefresh();
+          }
+        });
+      });
+    }
+
+    const MAX_LOAD_ATTEMPT = 1;
+    let lastDataVersion = null;
+
+    // 🔥 改用分批加载避免数据过大
+    function loadData(force = false, attempt = 1, options = {}) {
+      const onDone = (options && typeof options.onDone === 'function') ? options.onDone : function() {};
+      const successMessage = (options && typeof options.successMessage === 'string') ? options.successMessage : '';
+      const silent = !!(options && options.silent);
+      const loadToken = String(Date.now()) + '_' + Math.random().toString(36).slice(2);
+      window.__inventoryLoadToken = loadToken;
+      let finished = false;
+      let localAssetsLoading = false;
+
+      function finish(ok) {
+        if (finished) return;
+        finished = true;
+        try { onDone(!!ok); } catch (e) {}
+      }
+
+      function isStaleLoad() {
+        return window.__inventoryLoadToken !== loadToken;
+      }
+
+      const loadingOverlay = document.getElementById('loading-overlay');
+      const msgEl = document.querySelector('#loading-overlay p');
+      if (!silent) {
+        loadingOverlay.style.display = 'flex';
+        if (msgEl) msgEl.innerText = force ? "🔄 正在讀取最新數據..." : "🚀 正在載入數據...";
+      }
+
+      let loadedCount = 0;
+      const totalAPIs = 3; // 3个 API 调用
+      let hasError = false;
+      let assetsFirstPageReady = false;
+
+      // API 1: 获取庫存詳細數據
+      google.script.run.withSuccessHandler(res => {
+        if (isStaleLoad()) return;
+        if (!hasError && res && res.success) {
+          rawInventory = res.inventory || [];
+          expiryList = res.expiry || [];
+          LOG.debug("✅ 庫存數據加載成功：inventory=" + rawInventory.length);
+          loadedCount++;
+          checkAllLoaded();
+        } else {
+          handleLoadError("庫存數據", res);
+        }
+      }).withFailureHandler(err => {
+        if (isStaleLoad()) return;
+        handleLoadError("庫存數據", err);
+      }).getInventoryDetails(true, force === true);
+
+      // API 2: 獲取資產詳細數據（分頁加載）
+      loadAssetsPage(1);
+
+      // API 3: 獲取報廢統計數據（基礎版）
+      google.script.run.withSuccessHandler(res => {
+        if (isStaleLoad()) return;
+        if (res && res.success) {
+          window.scrapRecent = [];  // 初始为空，按需加载
+          window.scrapTxTotal = (typeof res.scrapTxTotal !== 'undefined') ? Number(res.scrapTxTotal) : undefined;
+          window.scrapByStatus = res.scrapByStatus || {};
+          LOG.debug("✅ 報廢統計數據加載成功");
+        } else {
+          LOG.warn("⚠️ 報廢統計數據加載失敗，使用默認值");
+          window.scrapRecent = [];
+          window.scrapTxTotal = undefined;
+          window.scrapByStatus = {};
+        }
+        loadedCount++;
+        checkAllLoaded();
+      }).withFailureHandler(err => {
+        if (isStaleLoad()) return;
+        LOG.warn("⚠️ 報廢統計數據加載失敗：" + getErrMsg(err));
+        window.scrapRecent = [];
+        window.scrapTxTotal = undefined;
+        window.scrapByStatus = {};
+        loadedCount++;
+        checkAllLoaded();
+      }).getRecentActivity();
+
+      function handleLoadError(apiName, error) {
+        if (isStaleLoad()) return;
+        if (!hasError) {
+          hasError = true;
+          console.error('❌ ' + apiName + ' 加載失敗：', error);
+          if (!silent) {
+            alert("❌ " + apiName + "載入失敗：" + (error?.message || error || '未知錯誤'));
+            loadingOverlay.style.display = 'none';
+          }
+          finish(false);
+        }
+      }
+
+      function checkAllLoaded() {
+        if (isStaleLoad()) return;
+        if (loadedCount === totalAPIs) {
+          if (!silent) {
+            loadingOverlay.style.display = 'none';
+            document.getElementById('main-ui').style.display = 'block';
+          }
+          
+          setTimeout(() => {
+            updateSummaryCounts();
+            processData();
+            if (!silent && successMessage) {
+              alert(successMessage);
+            } else if(!silent && force) {
+              alert("✅ 數據已更新！");
+            }
+            finish(true);
+          }, 50);
+        }
+      }
+      
+      // 🔥 分頁加載資產數據
+      function loadAssetsPage(page) {
+        if (isStaleLoad()) return;
+        if (localAssetsLoading) return;
+        localAssetsLoading = true;
+        
+        const isFirstPage = (page === 1);
+        if (isFirstPage) {
+          rawAssetsFull = [];  // 重置數據
+          preparedSig = '';
+        }
+        
+        google.script.run.withSuccessHandler(res => {
+          if (isStaleLoad()) {
+            localAssetsLoading = false;
+            return;
+          }
+          localAssetsLoading = false;
+          
+          if (!hasError && res && res.success) {
+            // 追加本页数据
+            rawAssetsFull = rawAssetsFull.concat(res.assets || []);
+            assetsCurrentPage = res.currentPage || page;
+            assetsTotalPages = res.totalPages || 0;
+
+            // 首頁資料到達就先進畫面，剩餘頁面背景載入
+            if (!assetsFirstPageReady) {
+              assetsFirstPageReady = true;
+              loadedCount++;
+              checkAllLoaded();
+            }
+            
+            LOG.debug("✅ 資產數據加載：頁 " + assetsCurrentPage + "/" + assetsTotalPages + 
+                      ", 已加載 " + rawAssetsFull.length + " 項");
+
+            // 若畫面已顯示，邊載邊刷新（降低等待感）
+            if (document.getElementById('main-ui').style.display !== 'none') {
+              updateSummaryCounts();
+              processData();
+            }
+            
+            // 如果還有更多頁，繼續加載 下一頁        
+            if (res.hasMore) {
+              const nextPage = assetsCurrentPage + 1;
+              const msgEl2 = document.querySelector('#loading-overlay p');
+              if (!silent && msgEl2) {
+                msgEl2.innerText = "🚀 正在載入資產數據（" + nextPage + "/" + assetsTotalPages + "）...";
+              }
+              loadAssetsPage(nextPage);
+            } else {
+              // 所有页加载完成
+              LOG.debug("✅ 資產數據全部加載完成：共 " + rawAssetsFull.length + " 項");
+            }
+          } else {
+            handleLoadError("資產數據", res);
+          }
+        }).withFailureHandler(err => {
+          if (isStaleLoad()) {
+            localAssetsLoading = false;
+            return;
+          }
+          localAssetsLoading = false;
+          handleLoadError("資產數據", err);
+        }).getAssetsDetails(page, ASSET_FETCH_PAGE_SIZE, force === true && page === 1);  // 降低 API 次數，減少總覽等待時間
+      }
+    }
+
+    function renderCategoryButtons(type) {
+      const container = document.getElementById(type === 'inv' ? 'invCategoryBox' : 'assetCategoryBox');
+      const data = type === 'inv' ? rawInventory : rawAssetsFull;
+      const current = type === 'inv' ? invCat : assetCat;
+      const counts = data.reduce((acc, curr) => {
+        const c = curr.category || "一般";
+        acc[c] = (acc[c] || 0) + 1;
+        return acc;
+      }, {});
+      const cats = ["全部", ...Object.keys(counts).sort()];
+      container.innerHTML = cats.map(c => {
+        const num = c === "全部" ? data.length : (counts[c] || 0);
+        return `<div class="cat-btn ${current === c ? 'active' : ''}" onclick="setCat('${type}', '${c}')">${c} <span>${num}</span></div>`;
+      }).join('');
+    }
+
+    function setCat(type, cat) {
+      if (type === 'inv') invCat = cat; else assetCat = cat;
+      resetPager();
+      processData();
+    }
+
+    // 🚀 修正後的搜尋邏輯：加入 location (位置) 比對
+    function processData() {
+      const rawKey = (document.getElementById('globalSearch').value || "").trim().toLowerCase();
+      const key = rawKey.length >= MIN_SEARCH_CHARS ? rawKey : '';
+      const filter = document.getElementById('statusFilter').value;
+      const expiryNameSet = (filter === 'expiry') ? new Set((expiryList || []).map(e => String(e.itemName || ''))) : null;
+      
+      // 🔥 如果選擇了「損耗/遺失」篩選，且報廢數據未加載，則加載
+      if (filter === 'scrap' && !scrapDetailsLoaded) {
+        loadScrapDetailsIfNeeded();
+        return;  // 等待加載完成後會自動重新調用 processData()
+      }
+
+      buildPreparedData();
+      
+      renderCategoryButtons('inv');
+      renderCategoryButtons('asset');
+
+      // 十方供養物過濾：加入位置比對
+      let fInv = preparedInv.filter(i => i._search.includes(key));
+      if (invCat !== "全部") fInv = fInv.filter(i => i._cat === invCat);
+      if (filter === 'sangha') fInv = fInv.filter(i => i.isSangha);
+      if (filter === 'expiry') fInv = fInv.filter(i => expiryNameSet.has(String(i.name || '')));
+      if (['borrowed', 'consumed', 'scrap', 'repair'].includes(filter)) fInv = [];
+
+      // 資產過濾：加入位置比對
+      let fAst = preparedAssetsCombined.filter(a => a._search.includes(key));
+      if (assetCat !== "全部") fAst = fAst.filter(a => a._cat === assetCat);
+      if (filter === 'borrowed') fAst = fAst.filter(a => a.status === '借出中');
+      if (filter === 'consumed') fAst = fAst.filter(a => a.status === '已領用');
+      if (filter === 'scrap') fAst = fAst.filter(a => ["毀損報廢","遺失扣除"].includes(a.status));
+      if (filter === 'repair') fAst = fAst.filter(a => a.status === '待維修');
+      if (filter === 'sangha' || filter === 'expiry') fAst = [];
+
+      const assetRenderKey = `${preparedSig}|${filter}|${assetCat}|${key}`;
+
+      renderInventoryList(fInv);
+      renderAssetsList(fAst, assetRenderKey);
+    }
+
+    function renderInventoryList(data) {
+      const container = document.getElementById('inv-container');
+      const start = (invPage - 1) * invPageSize;
+      const paged = data.slice(start, start + invPageSize);
+      let html = '<table><thead><tr style="background:#fafafa;"><th class="col-img">照片</th><th>品名規格</th><th style="width:110px;">有效期限</th><th style="text-align:right; width:80px;">庫存</th></tr></thead><tbody>';
+      
+      paged.forEach(i => {
+        // 🟢 修改點：使用 getSafeImgSrc，不再只限制 http
+        const safeSrc = getSafeImgSrc(i.photoUrl);
+        const imgHtml = safeSrc 
+          ? `<img src="${safeSrc}" class="item-img" onclick="zoomImg(this.src)" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"><div class="item-img" style="display:none; align-items:center; justify-content:center; background:#f1f5f9; font-size:20px;">📦</div>` 
+          : `<div class="item-img" style="display:flex; align-items:center; justify-content:center; background:#f1f5f9; font-size:20px;">📦</div>`;
+        
+        let expiryStr = i.expiryDate || "---", dateStyle = "";
+        if (expiryStr !== "---") {
+          const diffDays = (new Date(expiryStr) - new Date()) / 86400000;
+          if (diffDays < 0) { dateStyle = 'style="color:var(--danger); font-weight:bold;"'; expiryStr = "⚠️已過期"; }
+          else if (diffDays <= 30) { dateStyle = 'style="color:var(--warning); font-weight:bold;"'; }
+        }
+        html += `<tr><td>${imgHtml}</td><td><b>${i.name}</b><br><small style="color:var(--gray)">${i.category} | ${i.location}</small></td><td ${dateStyle}><small>${expiryStr}</small></td><td align="right"><b>${i.qty}</b> ${i.unit}</td></tr>`;
+      });
+      container.innerHTML = html + '</tbody></table>';
+      const total = Math.ceil(data.length / invPageSize);
+      document.getElementById('invPager').innerHTML = `<button class="page-btn" ${invPage===1?'disabled':''} onclick="invPage--;processData()">上頁</button> <b>${invPage}/${total||1}</b> <button class="page-btn" ${invPage===total||total===0?'disabled':''} onclick="invPage++;processData()">下頁</button>`;
+    }
+
+    // 🚀 修正後的資產列表 (使用後端提供的 count/ids)
+    function renderAssetsList(data, cacheKey) {
+      const tbody = document.getElementById('assetBody');
+      let finalData = [];
+
+      if (cacheKey && groupedAssetsCacheKey === cacheKey) {
+        finalData = groupedAssetsCacheData;
+      } else {
+        const grouped = {};
+
+        // 1. 分組：累加後端回傳的 count 與 ids（避免再次把同一組拆成多行）
+        data.forEach(a => {
+          const locationKey = String(a.location || '未設定').trim();
+          const key = `${a.name}|${a.spec}|${a.color}|${a.status}|${a.keeper || '庫房'}|${a.unit || '件'}|${locationKey}|${a.source||''}`;
+          const ids = Array.isArray(a.ids) ? a.ids.map(x => String(x).trim()).filter(Boolean) : (a.id ? [String(a.id).trim()] : []);
+          const thisCount = Number(a.count) || ids.length || 1;
+
+          if (!grouped[key]) {
+            grouped[key] = {
+              name: a.name,
+              spec: a.spec || '',
+              color: a.color || '',
+              ids: ids.slice(),
+              count: thisCount,
+              locations: new Set([a.location || '庫房']),
+              keepers: new Set([a.keeper || '庫房']),
+              units: new Set([a.unit || '件']),
+              statuses: new Set([a.status || '在庫']),
+              photoUrl: a.photoUrl || '',
+              source: a.source || ''
+            };
+          } else {
+            grouped[key].ids = grouped[key].ids.concat(ids);
+            grouped[key].count = (Number(grouped[key].count) || 0) + thisCount;
+            grouped[key].locations.add(a.location || '庫房');
+            grouped[key].keepers.add(a.keeper || '庫房');
+            grouped[key].units.add(a.unit || '件');
+            grouped[key].statuses.add(a.status || '在庫');
+            if (!grouped[key].photoUrl && a.photoUrl) grouped[key].photoUrl = a.photoUrl;
+          }
+        });
+
+        // 🚀 調試：打印分組後的結果
+        LOG.debug("🔀 前端分組後的資産（將在頁面顯示）：");
+        Object.values(grouped).forEach(a => {
+          LOG.debug(`  📦 ${a.name} | count:${a.count} | locations:${[...a.locations].join(',')} | statuses:${[...a.statuses].join(',')}`);
+        });
+
+        // 2. 排序
+        finalData = Object.values(grouped).sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'));
+        groupedAssetsCacheKey = cacheKey || '';
+        groupedAssetsCacheData = finalData;
+      }
+
+      // 3. 分頁
+      const start = (assetPage - 1) * assetPageSize;
+      const paged = finalData.slice(start, start + assetPageSize);
+
+      tbody.innerHTML = paged.map(a => {
+        // 處理多重狀態顯示
+        let statusHtml = "";
+        // 處理多重狀態顯示
+        if (a.statuses.size === 1) {
+            let s = [...a.statuses][0];
+          let sc = (s === "借出中" || s === "已領用") ? "status-out" : (["毀損報廢","遺失扣除"].includes(s) ? "status-danger" : "status-in");
+            statusHtml = `<span class="status-badge ${sc}">${s}</span>`;
+        } else {
+            statusHtml = `<span class="status-badge" style="background:#f3f4f6; color:#4b5563;">多種狀態 (${a.statuses.size})</span>`;
+        }
+
+        // 處理多重位置顯示
+        let locDisplay = [...a.locations].join('<br>');
+
+        let keeperDisplay = [...a.keepers].join(' / ');
+        if (a.keepers.size > 2) {
+          keeperDisplay = `${[...a.keepers][0]} 等 ${a.keepers.size} 位`;
+        }
+
+        const unitDisplay = [...a.units].join(' / ');
+
+        // 編號範圍
+        let idsArr = Array.isArray(a.ids) ? a.ids.filter(Boolean).map(x=>String(x)) : [];
+        idsArr = idsArr.sort();
+        let rangeDisplay = idsArr.length > 0 ? idsArr[0] : '';
+        if (idsArr.length > 1) {
+          const first = idsArr[0];
+          const last = idsArr[idsArr.length - 1];
+          const firstMatch = first.match(/(\d+)$/);
+          const lastMatch = last.match(/(\d+)$/);
+          if (firstMatch && lastMatch && first.replace(/\d+$/, '') === last.replace(/\d+$/, '')) {
+             const lastNumStr = lastMatch[1];
+             const suffix = lastNumStr.length > 2 ? lastNumStr.slice(-3) : lastNumStr.slice(-2);
+             rangeDisplay = `${first}~${suffix}`;
+          } else {
+             rangeDisplay = `${first}~...`;
+          }
+        }
+
+        const safeSrc = getSafeImgSrc(a.photoUrl);
+        const imgHtml = safeSrc
+          ? `<img src="${safeSrc}" class="item-img" onclick="zoomImg(this.src)" onerror="this.src='https://via.placeholder.com/45?text=🛠️'">`
+          : `<div class="item-img" style="display:flex; align-items:center; justify-content:center; background:#f1f5f9; font-size:20px;">🛠️</div>`;
+
+        return `<tr>
+          <td>${imgHtml}</td>
+          <td><code class="status-badge" style="background:#f1f5f9; color:#1e40af; font-family:monospace;">${rangeDisplay}</code></td>
+          <td><b>${a.name}</b> <span style="color:var(--primary); font-weight:900;">x${a.count}</span><br><small style="color:var(--gray)">${a.spec} / ${a.color}</small><br><small style="color:#475569; font-weight:700;">單位：${unitDisplay}</small><br><small style="color:#9a3412; font-weight:700;">保管人：${keeperDisplay}</small>
+          ${a.source === 'scrap_tx' ? '<br><small style="color:#ef4444; font-weight:700;">來源：交易紀錄</small>' : ''}</td>
+          <td><small>${locDisplay}</small></td>
+          <td>${statusHtml}</td>
+        </tr>`;
+      }).join('');
+
+      const total = Math.ceil(finalData.length / assetPageSize);
+      document.getElementById('assetPager').innerHTML = `<button class="page-btn" ${assetPage===1?'disabled':''} onclick="assetPage--;processData()">上頁</button> <b>${assetPage}/${total||1}</b> <button class="page-btn" ${assetPage===total||total===0?'disabled':''} onclick="assetPage++;processData()">下頁</button>`;
+    }
+    function exportReport(type) {
+      const rawKey = (document.getElementById('globalSearch').value || '').trim().toLowerCase();
+      const key = rawKey.length >= MIN_SEARCH_CHARS ? rawKey : '';
+      const filter = document.getElementById('statusFilter').value;
+      // 「匯出目前過濾結果」應跟隨目前分頁與其分類條件
+      const effectiveType = (type === 'all') ? (activeTab === 'consumable' ? 'inventory' : 'asset') : type;
+      const categoryFilter = (effectiveType === 'inventory') ? invCat : assetCat;
+      const btn = document.getElementById('btn-export-' + type);
+      const originalText = btn.innerHTML;
+      btn.disabled = true; btn.innerHTML = '⌛ 產出報表中...';
+      google.script.run.withSuccessHandler(htmlContent => {
+        btn.disabled = false; btn.innerHTML = originalText;
+        const win = window.open("", "_blank");
+        if (win) { win.document.write(htmlContent); win.document.close(); }
+        else { alert("⚠️ 報表視窗被攔截！"); }
+      }).exportInventoryToHtml(effectiveType, key, filter, categoryFilter);
+    }
+
+    function exportTxRange() {
+      const s = String(document.getElementById('txStartDate').value || '').trim();
+      const e = String(document.getElementById('txEndDate').value || '').trim();
+      if (!s || !e) {
+        alert('⚠️ 請先選擇交易起訖日期');
+        return;
+      }
+      if (s > e) {
+        alert('⚠️ 起日不可晚於迄日');
+        return;
+      }
+
+      const btn = document.getElementById('btn-export-range');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '⌛ 彙整交易紀錄中...';
+
+      google.script.run.withSuccessHandler(htmlContent => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(htmlContent);
+          win.document.close();
+        } else {
+          alert('⚠️ 報表視窗被攔截！');
+        }
+      }).withFailureHandler(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        alert('❌ 匯出失敗：' + getErrMsg(err));
+      }).exportTransactionHistoryByRange(s, e);
+    }
+
+    function initTxDateRangeDefault() {
+      const startEl = document.getElementById('txStartDate');
+      const endEl = document.getElementById('txEndDate');
+      if (!startEl || !endEl) return;
+      const today = new Date();
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      const toYmd = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+      if (!startEl.value) startEl.value = toYmd(firstDay);
+      if (!endEl.value) endEl.value = toYmd(today);
+    }
+
+    function updateSummaryCounts() {
+      // 使用後端回傳的 count 欄位來加總實際件數
+      const inS = rawAssetsFull.reduce((sum, a) => sum + ((a.status === '在庫') ? (Number(a.count) || 1) : 0), 0);
+      const out = rawAssetsFull.reduce((sum, a) => sum + ((a.status === '借出中') ? (Number(a.count) || 1) : 0), 0);
+      const consumed = rawAssetsFull.reduce((sum, a) => sum + ((a.status === '已領用') ? (Number(a.count) || 1) : 0), 0);
+      const scrap = (typeof scrapTxTotal !== 'undefined') ? scrapTxTotal : rawAssetsFull.reduce((sum, a) => sum + ((["毀損報廢","遺失扣除"].includes(a.status)) ? (Number(a.count) || 1) : 0), 0);
+      const rep = rawAssetsFull.reduce((sum, a) => sum + ((a.status === '待維修') ? (Number(a.count) || 1) : 0), 0);
+      const scrapBy = (window.scrapByStatus && typeof window.scrapByStatus === 'object') ? window.scrapByStatus : {};
+      const damage = Number(scrapBy['毀損報廢'] || 0);
+      const loss = Number(scrapBy['遺失扣除'] || 0);
+      const fallbackDamage = rawAssetsFull.reduce((sum, a) => sum + ((a.status === '毀損報廢') ? (Number(a.count) || 1) : 0), 0);
+      const fallbackLoss = rawAssetsFull.reduce((sum, a) => sum + ((a.status === '遺失扣除') ? (Number(a.count) || 1) : 0), 0);
+      document.getElementById('asset-in-count').textContent = inS;
+      document.getElementById('asset-out-count').textContent = out + rep + consumed;
+      document.getElementById('asset-scrap-count').textContent = scrap;
+      document.getElementById('asset-borrow-count').textContent = out;
+      document.getElementById('asset-repair-count').textContent = rep;
+      document.getElementById('asset-consume-count').textContent = consumed;
+      document.getElementById('asset-damage-count').textContent = damage || fallbackDamage;
+      document.getElementById('asset-loss-count').textContent = loss || fallbackLoss;
+      const ctx = document.getElementById('inventoryChart').getContext('2d');
+      if (myChart) myChart.destroy();
+      myChart = new Chart(ctx, { type: 'doughnut', data: { labels: ['在庫', '異動', '損耗'], datasets: [{ data: [inS, out + rep + consumed, scrap], backgroundColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } } });
+    }
+
+    function switchTab(type) {
+      activeTab = type;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById('tab-' + (type === 'consumable' ? 'inv' : 'ast') + '-btn').classList.add('active');
+      document.getElementById(type + '-content').classList.add('active');
+      processData();
+    }
+
+    function zoomImg(src) { document.getElementById('modal-img').src = src; document.getElementById('image-modal').style.display = 'flex'; }
+    
+    loadData();
+    syncDataVersionFromServer();
+    initTxDateRangeDefault();
+    renderTopNav();
+    document.getElementById('topNav').style.display = 'flex';
+
+    function renderTopNav() {
+      const items = [
+        { key: 'index',        label: '🏠 主選單' },
+        { key: 'recent',       label: '📋 最近捐贈' },
+        { key: 'near-expiry',  label: '⏰ 即期品' },
+        { key: 'withdraw',     label: '📤 領借用' },
+        { key: 'asset_return', label: '🔙 歸還' },
+        { key: 'asset_entry',  label: '🛠️ 入庫' },
+        { key: 'inventory',    label: '📊 總覽' }
+      ];
+      document.getElementById('topNav').innerHTML = items
+        .map(it => `<a class="${it.key === 'inventory' ? 'active' : ''}" target="_top" href="${it.key}.html">${it.label}</a>`)
+        .join('');
+    }
+    
+    function enableDragScroll(containerId) {
+      const slider = document.getElementById(containerId);
+      let isDown = false, startX, scrollLeft;
+      slider.addEventListener('mousedown', (e) => { isDown = true; startX = e.pageX - slider.offsetLeft; scrollLeft = slider.scrollLeft; });
+      slider.addEventListener('mouseleave', () => { isDown = false; });
+      slider.addEventListener('mouseup', () => { isDown = false; });
+      slider.addEventListener('mousemove', (e) => { if (!isDown) return; e.preventDefault(); const x = e.pageX - slider.offsetLeft; const walk = (x - startX) * 2; slider.scrollLeft = scrollLeft - walk; });
+    }
+    enableDragScroll('invCategoryBox');
+    enableDragScroll('assetCategoryBox');
+  </script>
+</body>
+</html>

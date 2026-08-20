@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>📤 物資領/借用系統</title>
+  <style>
+    :root { --primary: #1d4ed8; --success: #059669; --danger: #dc2626; --bg: #f8fafc; --text-main: #0f172a; --sangha: #f97316; }
+    body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; padding: 98px 15px 15px; max-width: 650px; margin: auto; background-color: var(--bg); color: var(--text-main); line-height: 1.5; }
+    
+    .card { background: white; padding: 22px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 15px; border: 1px solid #e2e8f0; }
+    h1 { font-size: 1.5rem; text-align: center; margin-bottom: 20px; font-weight: 800; color: #1e293b; }
+
+    label { font-weight: 900; color: #1e293b; display: block; margin-bottom: 6px; }
+    input, select { width: 100%; padding: 12px; border: 2px solid #cbd5e0; border-radius: 10px; font-size: 16px; outline: none; margin-bottom: 12px; font-weight: 800; box-sizing: border-box; }
+    
+    /* 🚀 動態背景：一般藍色 vs 供僧橘色 */
+    #info { display: none; padding: 15px; border-radius: 12px; margin-bottom: 15px; align-items: center; transition: 0.3s; }
+    .mode-normal { background: #f0f9ff; border: 1px solid #bae6fd; }
+    .mode-sangha { background: #fff7ed; border: 1px solid #ffedd5; animation: soft-pulse 2s infinite; }
+    
+    @keyframes soft-pulse { 0% { border-color: #ffedd5; } 50% { border-color: var(--sangha); } 100% { border-color: #ffedd5; } }
+
+    .preview-img { width: 85px; height: 85px; border-radius: 10px; object-fit: cover; margin-right: 15px; border: 2px solid #fff; }
+    .info-detail { flex: 1; }
+    .spec-text { color: #475569; font-size: 1rem; margin-bottom: 3px; font-weight: 900; }
+    
+    .sangha-badge { background: var(--sangha); color: white; padding: 3px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: 900; margin-bottom: 8px; display: inline-block; }
+    .loc-tag { cursor: pointer; color: #1d4ed8; background: #dbeafe; padding: 3px 10px; border-radius: 8px; font-weight: 800; font-size: 0.95rem; display: inline-block; border: 1px solid #bfdbfe; }
+    .item-note-block { margin: 8px 0 10px; padding: 8px 10px; border-radius: 10px; background: #fff7d6; border: 1px solid #fde68a; }
+    .item-note-label { color: #92400e; font-weight: 900; font-size: 0.9rem; margin-bottom: 4px; }
+    .item-note-text { color: #713f12; font-size: 0.92rem; font-weight: 800; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+    .item-note-toggle { margin-top: 4px; border: none; background: transparent; color: #1d4ed8; font-weight: 900; padding: 0; cursor: pointer; font-size: 0.9rem; }
+
+    .map-wrapper { position: relative; width: 100%; background: #f1f5f9; border-radius: 12px; overflow: hidden; border: 2px solid #cbd5e0; margin: 10px 0; }
+    #mapImg { width: 100%; height: auto; display: block; }
+    #mapHighlight { position: absolute; border: 4px solid #FF3D00; background: rgba(255, 235, 59, 0.45); display: none; pointer-events: none; box-shadow: 0 0 15px rgba(255, 61, 0, 0.6); z-index: 10; transition: all 0.3s; }
+
+    .btn-main { width: 100%; padding: 16px; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
+    .btn-blue { background: #2563eb; color: white; margin-bottom: 12px; }
+    .btn-green { background: var(--success); color: white; }
+    .btn-success-mode { background: var(--success) !important; animation: pulse-green 2s infinite !important; transform: scale(1.02); }
+    @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(5, 150, 105, 0); } 100% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); } }
+
+    #mapModal, #confirmBox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); z-index: 2000; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(5px); flex-direction: column; }
+    .modal-content { background: white; width: 100%; max-width: 500px; padding: 20px; border-radius: 20px; text-align: center; }
+
+    .top-dock {
+      position: fixed;
+      left: 50%;
+      top: 10px;
+      transform: translateX(-50%);
+      width: min(calc(100% - 24px), 650px);
+      padding: 8px 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid rgba(203,213,224,0.95);
+      box-shadow: 0 10px 26px rgba(15,23,42,0.1);
+      backdrop-filter: blur(8px);
+      z-index: 900;
+      box-sizing: border-box;
+    }
+    .top-nav { display: flex; gap: 8px; flex-wrap: wrap; overflow-x: visible; justify-content: center; align-items: center; width: 100%; box-sizing: border-box; margin: 0; padding: 0; }
+    .top-nav::-webkit-scrollbar { display: none; }
+    .top-nav a { flex: 0 0 auto; white-space: nowrap; text-align: center; text-decoration: none; color: #334155; background: #e2e8f0; border: 1px solid #cbd5e1; padding: 7px 12px; border-radius: 999px; font-weight: 800; font-size: 13px; }
+    .top-nav a.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+    .page-tip { margin: -8px 0 16px; padding: 10px 12px; border-radius: 12px; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; font-size: 0.88rem; font-weight: 700; }
+    
+    .cart-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 8px; font-weight: 800; text-align: left; }
+    .cart-item-name { flex: 1; margin-right: 10px; font-size: 0.95rem; }
+    .btn-del { color: var(--danger); background: none; border: 1px solid #fee2e2; padding: 5px 10px; border-radius: 8px; cursor: pointer; flex-shrink: 0; }
+
+    #image-modal { display: none; position: fixed; z-index: 3000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; flex-direction: column; backdrop-filter: blur(5px); }
+    #modal-img-zoom { max-width: 90%; max-height: 80%; border-radius: 8px; border: 4px solid white; object-fit: contain; }
+
+    .cabinet-panel { display: none; margin-bottom: 10px; padding: 10px; background: #f8fafc; border: 1px solid #dbeafe; border-radius: 10px; }
+    .cabinet-title { font-size: 0.9rem; color: #1e40af; margin-bottom: 8px; font-weight: 900; }
+    .cabinet-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .cabinet-chip { border: 1px solid #bfdbfe; background: #eff6ff; color: #1e3a8a; border-radius: 999px; padding: 6px 10px; font-size: 0.85rem; font-weight: 900; cursor: pointer; }
+    .cabinet-chip.active { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+
+    @media (max-width: 600px) {
+      body { padding: 104px 12px 12px; max-width: 100%; }
+      .card { padding: 16px; }
+      .page-tip { font-size: 0.82rem; margin-bottom: 12px; }
+      .top-dock { width: calc(100% - 24px); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top-dock">
+    <div id="topNav" class="top-nav"></div>
+  </div>
+
+  <h1>📤 物資領用 / 借出</h1>
+  <div class="page-tip">先選模式，再選物品與數量；點送出後若同步或照片資料異常，頁面會直接提示。</div>
+
+  <div class="card">
+    <label>1. 模式選擇</label>
+    <select id="mode" onchange="resetModeView()">
+      <option value="consumable">📦 領用 (十方供養物)</option>
+      <option value="asset">🛠️ 固定資產 (借用/領用)</option>
+    </select>
+
+    <div id="assetActionBox" style="display:none; background:#eef2ff; padding:10px; border-radius:10px; border:1px solid #c7d2fe; margin-bottom:12px;">
+      <label style="margin-bottom:4px; color:#3730a3;">資產動作</label>
+      <select id="assetAction" onchange="refreshAssetActionUi()" style="margin:0;">
+        <option value="borrow">📤 借用 (需歸還)</option>
+        <option value="consume">📦 領用 (不歸還)</option>
+      </select>
+    </div>
+
+    <div id="sanghaBox" style="background:#fff7ed; padding:12px; border-radius:10px; display:flex; align-items:center; gap:10px; margin-bottom:15px; border:1px solid #fed7aa;">
+      <input type="checkbox" id="sanghaToggle" style="width:20px; height:20px;" onchange="loadData()">
+      <label for="sanghaToggle" style="margin:0; color:#c2410c; cursor:pointer; font-weight:900;">🔓 顯示「供僧」物資</label>
+    </div>
+
+    <label>2. 搜尋物品 (可搭配下方篩選)</label>
+    <input type="text" id="search" placeholder="輸入關鍵字直接找 (例如: 長條桌)..." oninput="renderSelectFromSearch()">
+    
+    <div style="background: #eff6ff; padding: 10px; border-radius: 8px; border: 1px dashed #bfdbfe; margin-bottom: 10px;">
+      <label style="font-size:0.9rem; color:#1e40af; margin-bottom:5px;">📂 快速分類瀏覽：</label>
+      <div style="display:flex; gap:5px; margin-bottom:5px;">
+        <select id="catSel" onchange="onCatChange()" style="flex:1; padding:8px; margin:0;"><option value="">1. 選擇單位</option></select>
+        <select id="floorSel" onchange="onFloorChange()" style="flex:1; padding:8px; margin:0;"><option value="">2. 樓層</option></select>
+      </div>
+      <select id="zoneSel" onchange="onZoneChange()" style="width:100%; padding:8px; margin:0;"><option value="">3. 區域</option></select>
+    </div>
+
+    <div id="cabinetPanel" class="cabinet-panel">
+      <div class="cabinet-title">4. 櫃位群組（點選櫃位後展開品項）</div>
+      <div id="cabinetList" class="cabinet-list"></div>
+    </div>
+
+    <select id="itemSelect" onchange="showInfo()">
+      <option value="">-- 請先篩選或搜尋 --</option>
+    </select>
+
+    <div id="info"></div>
+    
+    <label>3. 數量</label>
+    <input type="number" id="qty" value="1" min="1">
+    <button class="btn-main btn-blue" onclick="add()">➕ 加入待領/借清單</button>
+  </div>
+
+  <div class="card" id="cartArea">
+    <label>待領/借清單</label>
+    <div id="cartList" style="text-align:center; color:#64748b; font-weight:800; margin: 10px 0;">清單目前是空的</div>
+    <button id="submitBtn" class="btn-main btn-green" style="margin-top:15px; display:none;" onclick="confirmAll()">✅ 確認無誤，進行核對</button>
+  </div>
+
+  <div id="mapModal" onclick="this.style.display='none'">
+    <div class="modal-content">
+      <h3 id="mapTitle" style="margin-top:0;">📍 位置導引</h3>
+      <div id="loadingText" style="font-size: 13px; color: #64748b; margin-bottom: 8px;">載入中...</div>
+      <div class="map-wrapper"><img id="mapImg" src="" /><div id="mapHighlight"></div></div>
+      <button onclick="document.getElementById('mapModal').style.display='none'" style="width:100%; margin-top:15px; padding:12px; background:#475569; color:white; border:none; border-radius:10px; font-weight:900; cursor:pointer;">關閉地圖</button>
+    </div>
+  </div>
+
+  <div id="confirmBox">
+    <div class="modal-content" style="max-width: 440px;">
+      <h2 style="margin-top:0;">📝 領/借用最終確認</h2>
+      <div id="summary" style="margin-bottom:15px; background:#f8fafc; padding:10px; border-radius:10px; font-weight:800; color:#1d4ed8; text-align: left;"></div>
+      <label>領/借用人</label><input type="text" id="receiver" placeholder="姓名或單位">
+      <div id="assetFields" style="display:none;"><label>預計歸還日</label><input type="date" id="rDate" onfocus="this.min=getToday()" required></div>
+      <label>經手人</label><input type="text" id="handler" placeholder="您的姓名">
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button onclick="document.getElementById('confirmBox').style.display='none'" style="flex:1; padding:12px; border-radius:10px; border:1px solid #ccc; font-weight:900;">取消</button>
+        <button id="goBtn" onclick="submit()" style="flex:2; padding:12px; border-radius:10px; background:var(--success); color:white; border:none; font-weight:900;">確認送出</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="image-modal" onclick="this.style.display='none'">
+  <img id="modal-img-zoom" src="">
+  <p style="color:white; margin-top:15px; font-size: 0.9em;">( 點擊任何處關閉 )</p>
+  </div>
+
+  <script src="./gas-polyfill.js"></script>
+  <script>
+    let inv = [], assets = [], cart = [];
+    let CURRENT_RENDERED_ITEM_MAP = {};
+    let ROOM_DATA = {}, FLOOR_MAPS = {};
+    const currentUrlParams = new URLSearchParams(window.location.search);
+    const currentPage = currentUrlParams.get('page') || 'withdraw'; 
+    let lastDataVersion = '0';
+    let isLoading = false;
+    let versionPollTimer = null;
+    const VERSION_POLL_MS = 60000;
+    let isLoadingAssets = false;
+    let assetsStale = false;
+    let assetsLoadedOnce = false;
+    let submitRequestPending = false;
+    let submitWatchdog = null;
+    let submitSlowWarned = false;
+    let INFO_NOTE_EXPANDED = false;
+    let LAST_INFO_ITEM_KEY = '';
+    const SUBMIT_TIMEOUT_MS = 12000;
+    const LOC_PARSE_CACHE = {};
+    let LAST_NINE_GRID_LOC = '';
+    let LAST_NINE_GRID_AT = 0;
+
+    // 🚀 1. 圖片縮圖轉換工具 (確保能顯示)
+    function getDirectUrl(url) {
+      if (!url) return "";
+      let src = String(url).trim();
+      if (src.indexOf("drive.google.com") > -1) {
+        const match = src.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        const match2 = src.match(/id=([a-zA-Z0-9_-]+)/);
+        const fileId = (match && match[1]) ? match[1] : ((match2 && match2[1]) ? match2[1] : null);
+        if (fileId) {
+          return "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w4000";
+        }
+      }
+      return src; 
+    }
+
+    function escapeHtml(text) {
+      return String(text || '').replace(/[&<>\"']/g, function(ch) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+      });
+    }
+
+    function renderInfoNote(noteText) {
+      const note = String(noteText || '').trim();
+      if (!note) return '';
+
+      const limit = 52;
+      const canCollapse = note.length > limit;
+      const textToShow = (INFO_NOTE_EXPANDED || !canCollapse) ? note : (note.slice(0, limit) + '...');
+      const toggleBtn = canCollapse
+        ? `<button type="button" class="item-note-toggle" onclick="toggleInfoNote(event)">${INFO_NOTE_EXPANDED ? '收合' : '更多'}</button>`
+        : '';
+
+      return `
+        <div class="item-note-block">
+          <div class="item-note-label">備註</div>
+          <div class="item-note-text">${escapeHtml(textToShow)}</div>
+          ${toggleBtn}
+        </div>`;
+    }
+
+    function toggleInfoNote(evt) {
+      if (evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+      }
+      INFO_NOTE_EXPANDED = !INFO_NOTE_EXPANDED;
+      showInfo();
+    }
+
+    // 小工具：安全擷取錯誤或回傳訊息
+    // 取得今日日期字串 (YYYY-MM-DD)
+    function getToday() {
+      return new Date().toISOString().split('T')[0];
+    }
+
+    function getErrMsg(err) {
+      try {
+        if (!err) return '未知錯誤';
+        if (typeof err === 'string') return err;
+        if (err.message) return err.message;
+        if (err.toString) return err.toString();
+        return JSON.stringify(err);
+      } catch (e) { return '未知錯誤'; }
+    }
+
+    // LOG wrapper: 除錯開關
+    window.DEBUG = window.DEBUG || false;
+    const LOG = { debug: (...a) => { if (window.DEBUG) console.log(...a); }, info: (...a) => { if (window.DEBUG) console.info(...a); }, error: (...a) => console.error(...a) };
+
+    function initLocation() {
+      google.script.run.withSuccessHandler(res => {
+        ROOM_DATA = res.roomData; FLOOR_MAPS = res.floorMaps;
+      }).getLocationData();
+    }
+
+    function publishNineGridTarget(locName) {
+      const cleanName = String(locName || '').trim();
+      if (!cleanName) return;
+
+      const now = Date.now();
+      if (cleanName === LAST_NINE_GRID_LOC && (now - LAST_NINE_GRID_AT) < 1200) return;
+      LAST_NINE_GRID_LOC = cleanName;
+      LAST_NINE_GRID_AT = now;
+
+      try {
+        localStorage.setItem('nineGridTargetLoc', cleanName);
+        localStorage.setItem('nineGridTargetLocAt', String(now));
+      } catch (e) {}
+
+      google.script.run
+        .withFailureHandler(() => {})
+        .setNineGridTarget(cleanName);
+    }
+
+    function decorateListForUi(list) {
+      if (!Array.isArray(list)) return [];
+      return list.map(item => {
+        const loc = String(item.location || '');
+        item._locParsed = parseLoc(loc);
+        item._search = `${item.name || ''} ${item.spec || ''} ${item.color || ''} ${loc}`.toLowerCase();
+        return item;
+      });
+    }
+
+    function loadData() {
+      if (isLoading) return;
+      isLoading = true;
+      const isSangha = document.getElementById('sanghaToggle') ? document.getElementById('sanghaToggle').checked : true;
+      const selectEl = document.getElementById('itemSelect');
+
+      if (selectEl) {
+        selectEl.innerHTML = '<option value="">⌛ 正在從所有位置表聚合庫存...</option>';
+      }
+
+      const finishLoad = () => { isLoading = false; };
+
+      const runGetInventory = (attempt = 1) => {
+        google.script.run.withSuccessHandler(res => {
+          if (res && res.success) {
+            inv = decorateListForUi(res.inventory || []);
+            buildTree();
+            LOG.debug("⚡ 多位置表數據聚合同步完成");
+            finishLoad();
+            if (document.getElementById('mode').value === 'asset') {
+              ensureAssetsLoaded();
+            }
+            return;
+          }
+
+          if (attempt < 2) {
+            console.warn('getWithdrawInventory 回傳無效，準備重試：', res);
+            setTimeout(() => runGetInventory(attempt + 1), 800);
+            return;
+          }
+
+          console.error('❌ getWithdrawInventory 返回失敗：', res);
+          const errMsg = (res && res.message) || '未知錯誤（请查看 Console）';
+          alert("❌ 數據載入失敗：" + errMsg + "\n\n请按 F12 查看 Console 获取详细信息");
+          finishLoad();
+        }).withFailureHandler(err => {
+          if (attempt < 2) {
+            console.warn('getWithdrawInventory 呼叫失敗，準備重試：', getErrMsg(err));
+            setTimeout(() => runGetInventory(attempt + 1), 800);
+            return;
+          }
+          console.error('❌ getWithdrawInventory 調用異常：', err);
+          alert("❌ 系統錯誤：" + (err.message || err.toString()) + "\n\n请按 F12 查看 Console 获取详细信息");
+          finishLoad();
+        }).getWithdrawInventory(isSangha);
+      };
+
+      runGetInventory();
+    }
+
+    function ensureAssetsLoaded() {
+      if (isLoadingAssets) return;
+      if (assetsLoadedOnce && !assetsStale) return;
+
+      isLoadingAssets = true;
+      const selectEl = document.getElementById('itemSelect');
+      if (selectEl) {
+        selectEl.innerHTML = '<option value="">⌛ 載入固定資產中...</option>';
+      }
+
+      const runGetAssets = (attempt = 1) => {
+        google.script.run.withSuccessHandler(res => {
+          if (res && res.success) {
+            assets = decorateListForUi(res.assets || []);
+            assetsStale = false;
+            assetsLoadedOnce = true;
+            isLoadingAssets = false;
+            if (document.getElementById('mode').value === 'asset') {
+              buildTree();
+            }
+            return;
+          }
+          if (attempt < 2) {
+            console.warn('getWithdrawAssets 回傳無效，準備重試：', res);
+            setTimeout(() => runGetAssets(attempt + 1), 800);
+            return;
+          }
+          isLoadingAssets = false;
+          assetsLoadedOnce = true;
+          console.error('❌ getWithdrawAssets 返回失敗：', res);
+          if (selectEl) {
+            selectEl.innerHTML = '<option value="">(固定資產載入失敗，請重新整理頁面)</option>';
+          }
+        }).withFailureHandler(err => {
+          if (attempt < 2) {
+            console.warn('getWithdrawAssets 呼叫失敗，準備重試：', getErrMsg(err));
+            setTimeout(() => runGetAssets(attempt + 1), 800);
+            return;
+          }
+          isLoadingAssets = false;
+          assetsLoadedOnce = true;
+          console.error('❌ getWithdrawAssets 调用异常：', err);
+          if (selectEl) {
+            selectEl.innerHTML = '<option value="">(固定資產載入失敗，請重新整理頁面)</option>';
+          }
+        }).getWithdrawAssets();
+      };
+
+      runGetAssets();
+    }
+
+    function startVersionPolling() {
+      if (versionPollTimer) return;
+      google.script.run.withSuccessHandler(ver => {
+        lastDataVersion = String(ver || '0');
+      }).withFailureHandler(() => {}).getDataVersion();
+
+      versionPollTimer = setInterval(() => {
+        if (isLoading || document.hidden) return;
+        google.script.run.withSuccessHandler(ver => {
+          const nextVersion = String(ver || '0');
+          if (nextVersion !== lastDataVersion) {
+            lastDataVersion = nextVersion;
+            assetsStale = true;
+            loadData();
+          }
+        }).withFailureHandler(() => {}).getDataVersion();
+      }, VERSION_POLL_MS);
+    }
+
+    // === 🌳 三層式選單核心邏輯 ===
+    let TREE_DATA = {};
+    let RAW_LIST = []; 
+    let CURRENT_ZONE_ITEMS = [];
+    let CURRENT_CABINET_KEY = '';
+
+    function parseLoc(locStr) {
+      const key = String(locStr || '');
+      if (Object.prototype.hasOwnProperty.call(LOC_PARSE_CACHE, key)) {
+        return LOC_PARSE_CACHE[key];
+      }
+
+      let parsed;
+      if (!key) {
+        parsed = { cat: "未分類", floor: "其他", zone: "無" };
+      } else {
+        const compact = key.replace(/[－–—]/g, '-').replace(/\s+/g, '');
+        const zoneMatch = compact.match(/^((?:\d+F|B\d+))-([A-Z])(?:區|[-_]?\d{1,3}.*)?$/i);
+        if (zoneMatch) {
+          const tail = compact
+            .replace(new RegExp('^' + zoneMatch[1] + '-' + zoneMatch[2], 'i'), '')
+            .replace(/^區/, '')
+            .replace(/^\d{1,3}/, '');
+          parsed = {
+            floor: zoneMatch[1].toUpperCase(),
+            zone: (zoneMatch[2].toUpperCase() + '區'),
+            cat: tail || "共用"
+          };
+        } else {
+          parsed = { cat: "未分類", floor: "其他", zone: key };
+        }
+      }
+
+      LOC_PARSE_CACHE[key] = parsed;
+      return parsed;
+    }
+
+    function buildTree() {
+      TREE_DATA = {};
+      const mode = document.getElementById('mode').value;
+      RAW_LIST = (mode === 'consumable' ? inv : assets);
+
+      if (mode === 'asset' && (assetsStale || (!assetsLoadedOnce && assets.length === 0))) {
+        ensureAssetsLoaded();
+        RAW_LIST = [];
+      }
+
+      // 先依目前模式/動作過濾，讓空區域不會出現在下拉中
+      RAW_LIST = RAW_LIST.filter(item => isSelectableInCurrentMode(item, mode));
+
+      RAW_LIST.forEach(item => {
+        const p = item._locParsed || parseLoc(item.location || '');
+        if (!TREE_DATA[p.cat]) TREE_DATA[p.cat] = {};
+        if (!TREE_DATA[p.cat][p.floor]) TREE_DATA[p.cat][p.floor] = {};
+        if (!TREE_DATA[p.cat][p.floor][p.zone]) TREE_DATA[p.cat][p.floor][p.zone] = [];
+        TREE_DATA[p.cat][p.floor][p.zone].push(item);
+      });
+
+      initCatSelect();
+    }
+
+    function initCatSelect() {
+      const catSel = document.getElementById('catSel');
+      let html = '<option value="">1. 選擇單位</option>';
+      Object.keys(TREE_DATA).forEach(cat => { html += `<option value="${cat}">${cat}</option>`; });
+      catSel.innerHTML = html;
+      
+      document.getElementById('floorSel').innerHTML = '<option value="">2. 樓層</option>';
+      document.getElementById('zoneSel').innerHTML = '<option value="">3. 區域</option>';
+      hideCabinetPanel();
+      renderSelectFromSearch(); 
+    }
+
+    function onCatChange() {
+      const cat = document.getElementById('catSel').value;
+      const floorSel = document.getElementById('floorSel');
+      let html = '<option value="">2. 樓層</option>';
+      document.getElementById('zoneSel').innerHTML = '<option value="">3. 區域</option>';
+      
+      if (cat && TREE_DATA[cat]) {
+        Object.keys(TREE_DATA[cat]).forEach(floor => { html += `<option value="${floor}">${floor}</option>`; });
+      }
+      floorSel.innerHTML = html;
+      hideCabinetPanel();
+      resetItemSelect();
+    }
+
+    function onFloorChange() {
+      const cat = document.getElementById('catSel').value;
+      const floor = document.getElementById('floorSel').value;
+      const zoneSel = document.getElementById('zoneSel');
+      let html = '<option value="">3. 區域</option>';
+      
+      if (cat && floor && TREE_DATA[cat][floor]) {
+        Object.keys(TREE_DATA[cat][floor]).forEach(zone => { html += `<option value="${zone}">${zone}</option>`; });
+      }
+      zoneSel.innerHTML = html;
+      hideCabinetPanel();
+      resetItemSelect();
+    }
+
+    function onZoneChange() {
+      const zoneItems = getScopedZoneItems();
+      CURRENT_CABINET_KEY = '';
+      if (!zoneItems.length) {
+        hideCabinetPanel();
+        resetItemSelect('(此區域無相符物品)');
+        return;
+      }
+      CURRENT_ZONE_ITEMS = zoneItems;
+      renderCabinetGroups(CURRENT_ZONE_ITEMS);
+      resetItemSelect('-- 請先點選上方櫃位群組 --');
+    }
+
+    function getCabinetLabel(item) {
+      const loc = String((item && item.location) || '').trim();
+      return loc || '未標註';
+    }
+
+    function getItemAvailableCount(item) {
+      const mode = document.getElementById('mode').value;
+      if (mode === 'consumable') return Math.max(0, Number(item.qty) || 0);
+      if (typeof item.count !== 'undefined') return Math.max(0, Number(item.count) || 0);
+      if (Array.isArray(item.ids)) return item.ids.length;
+      return 1;
+    }
+
+    function hideCabinetPanel() {
+      const panel = document.getElementById('cabinetPanel');
+      const list = document.getElementById('cabinetList');
+      if (panel) panel.style.display = 'none';
+      if (list) list.innerHTML = '';
+      CURRENT_ZONE_ITEMS = [];
+      CURRENT_CABINET_KEY = '';
+    }
+
+    function getScopedZoneItems() {
+      const cat = document.getElementById('catSel').value;
+      const floor = document.getElementById('floorSel').value;
+      const zone = document.getElementById('zoneSel').value;
+      if (!(cat && floor && zone && TREE_DATA[cat] && TREE_DATA[cat][floor] && TREE_DATA[cat][floor][zone])) return [];
+      return TREE_DATA[cat][floor][zone] || [];
+    }
+
+    function renderCabinetGroups(items) {
+      const panel = document.getElementById('cabinetPanel');
+      const list = document.getElementById('cabinetList');
+      if (!panel || !list) return;
+
+      const stats = {};
+      items.forEach(it => {
+        const cab = getCabinetLabel(it);
+        if (!stats[cab]) stats[cab] = 0;
+        stats[cab] += getItemAvailableCount(it);
+      });
+
+      const keys = Object.keys(stats).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+      if (!keys.length) {
+        panel.style.display = 'none';
+        list.innerHTML = '';
+        return;
+      }
+
+      panel.style.display = 'block';
+      list.innerHTML = keys.map(cab => {
+        const activeClass = (CURRENT_CABINET_KEY === cab) ? 'active' : '';
+        return `<button type="button" class="cabinet-chip ${activeClass}" onclick="selectCabinet('${encodeURIComponent(cab)}')">${cab} ${stats[cab]}</button>`;
+      }).join('');
+    }
+
+    function selectCabinet(encodedCabinet) {
+      const cabinet = decodeURIComponent(String(encodedCabinet || ''));
+      CURRENT_CABINET_KEY = cabinet;
+      renderCabinetGroups(CURRENT_ZONE_ITEMS);
+      const scoped = CURRENT_ZONE_ITEMS.filter(it => getCabinetLabel(it) === cabinet);
+      renderFinalItems(scoped);
+    }
+
+    function resetItemSelect(message) {
+      const msg = message || '-- 請依序選擇上方分類 --';
+      const itemSel = document.getElementById('itemSelect');
+      itemSel.innerHTML = `<option value="">${msg}</option>`;
+      itemSel.selectedIndex = 0;
+      document.getElementById('info').style.display = 'none';
+    }
+
+    function renderSelectFromSearch() {
+      const key = document.getElementById('search').value.toLowerCase();
+      const mode = document.getElementById('mode').value;
+      if (mode === 'asset' && (assetsStale || (!assetsLoadedOnce && assets.length === 0))) {
+        ensureAssetsLoaded();
+        document.getElementById('itemSelect').innerHTML = '<option value="">⌛ 載入固定資產中...</option>';
+        return;
+      }
+
+      const zoneItems = getScopedZoneItems();
+      if (zoneItems.length) {
+        CURRENT_ZONE_ITEMS = zoneItems;
+        renderCabinetGroups(CURRENT_ZONE_ITEMS);
+      }
+
+      let baseList = RAW_LIST;
+      if (CURRENT_CABINET_KEY && CURRENT_ZONE_ITEMS.length) {
+        baseList = CURRENT_ZONE_ITEMS.filter(it => getCabinetLabel(it) === CURRENT_CABINET_KEY);
+      } else if (zoneItems.length) {
+        baseList = zoneItems;
+      }
+
+      if (!key) {
+        if (CURRENT_CABINET_KEY && CURRENT_ZONE_ITEMS.length) {
+          renderFinalItems(baseList);
+          return;
+        }
+        if (zoneItems.length) {
+          resetItemSelect('-- 請先點選上方櫃位群組 --');
+          return;
+        }
+        resetItemSelect('-- 請使用上方篩選或搜尋 --');
+        return;
+      }
+      const filtered = baseList.filter(i => {
+        const fullTxt = i._search || `${i.name} ${i.spec||''} ${i.color||''} ${i.location||''}`.toLowerCase();
+        return fullTxt.includes(key);
+      });
+      renderFinalItems(filtered);
+    }
+
+    function renderSelect() { buildTree(); }
+
+    function getCurrentAssetAction() {
+      const mode = document.getElementById('mode').value;
+      if (mode !== 'asset') return 'borrow';
+      const actionEl = document.getElementById('assetAction');
+      return actionEl ? actionEl.value : 'borrow';
+    }
+
+    function isSelectableInCurrentMode(item, mode) {
+      if (mode !== 'asset') return true;
+      const statusOk = (item.status || '在庫') === '在庫';
+      if (!statusOk) return false;
+      const assetAction = getCurrentAssetAction();
+      const outRule = (item.outRule || '僅借用');
+      if (assetAction === 'consume' && outRule === '僅借用') return false;
+      if (assetAction === 'borrow' && outRule === '僅領用') return false;
+      return true;
+    }
+
+    function refreshAssetActionUi() {
+      const mode = document.getElementById('mode').value;
+      const actionBox = document.getElementById('assetActionBox');
+      if (actionBox) actionBox.style.display = (mode === 'asset') ? 'block' : 'none';
+      if (inv.length === 0) return;
+      if (mode === 'asset') {
+        buildTree();
+      } else {
+        renderSelectFromSearch();
+      }
+    }
+
+    function getPendingCartKey(item, mode) {
+      if (mode === 'asset') {
+        if (Array.isArray(item.ids) && item.ids.length) {
+          return item.ids.map(x => String(x).trim()).filter(Boolean).join(',');
+        }
+        if (item.id) return String(item.id).trim();
+      }
+      return [
+        String(item.name || '').trim(),
+        String(item.location || '').trim(),
+        String(item.spec || '').trim(),
+        String(item.color || '').trim()
+      ].join('||');
+    }
+
+    function getPendingCartQuantity(item, mode) {
+      const itemKey = getPendingCartKey(item, mode);
+      if (!itemKey) return false;
+      return cart.reduce((sum, c) => {
+        if (mode === 'asset') {
+          if (c.type !== 'asset' || String(c.assetIds || '').trim() !== itemKey) return sum;
+          return sum + (Number(c.quantity || c.qty || 1) || 1);
+        }
+        if (c.type !== 'consumable') return sum;
+        const cartKey = [
+          String(c.itemName || '').trim(),
+          String(c.location || '').trim(),
+          String(c.spec || '').trim(),
+          String(c.color || '').trim()
+        ].join('||');
+        if (cartKey !== itemKey) return sum;
+        return sum + (Number(c.quantity || c.qty || 1) || 1);
+      }, 0);
+    }
+
+    function renderFinalItems(itemList) {
+      const itemSel = document.getElementById('itemSelect');
+      CURRENT_RENDERED_ITEM_MAP = {};
+      
+      if (!itemList || itemList.length === 0) {
+         itemSel.innerHTML = '<option value="">(此區域無相符物品)</option>';
+         return;
+      }
+
+      let html = '<option value="">-- 請選擇物品 --</option>';
+      const mode = document.getElementById('mode').value;
+
+      // 若為資產模式，只顯示目前狀態為「在庫」的分組，避免借出中項目出現在可借列表
+      if (mode === 'asset') {
+        itemList = itemList.filter(it => isSelectableInCurrentMode(it, mode));
+      }
+
+      itemList = itemList.map(it => {
+        const pendingQty = getPendingCartQuantity(it, mode);
+
+        if (mode === 'consumable') {
+          const remainingQty = Math.max(0, (Number(it.qty) || 0) - pendingQty);
+          if (remainingQty <= 0) return null;
+          return Object.assign({}, it, { qty: remainingQty });
+        }
+
+        const baseCount = (typeof it.count !== 'undefined')
+          ? (Number(it.count) || 0)
+          : ((Array.isArray(it.ids) && it.ids.length) ? it.ids.length : 1);
+        const remainingCount = Math.max(0, baseCount - pendingQty);
+        if (remainingCount <= 0) return null;
+        return Object.assign({}, it, { count: remainingCount });
+      }).filter(Boolean);
+
+      if (!itemList.length) {
+         itemSel.innerHTML = '<option value="">(相符物品已在待送出清單中)</option>';
+         document.getElementById('info').style.display = 'none';
+         return;
+      }
+
+      itemList.forEach((i, idx) => {
+        const specPart = (i.spec && i.spec !== '無') ? ` [${i.spec}]` : '';
+        const colorPart = (i.color && i.color !== '無') ? ` (${i.color})` : '';
+        const sanghaTag = i.isSangha ? '☸️ [供僧] ' : ''; 
+        const locPart = (i.location) ? ` @ ${i.location}` : '';
+        const itemKey = `opt_${idx}`;
+        CURRENT_RENDERED_ITEM_MAP[itemKey] = i;
+
+        let val = i.id || i.name; 
+        if(i.ids && Array.isArray(i.ids)) val = i.ids.join(',');
+
+        let countText = "";
+        if (mode === 'consumable') {
+           countText = `(餘:${i.qty})`;
+        } else {
+           let count = i.count; 
+           if (count === undefined) count = 1; 
+           countText = `(在庫:${count})`;
+        }
+
+        const displayName = `${sanghaTag}${i.name}${specPart}${colorPart}`;
+        html += `<option value="${val}" data-name="${i.name}" data-item-key="${itemKey}">${displayName}${locPart} ${countText}</option>`;
+      });
+      
+      itemSel.innerHTML = html;
+      
+      if(itemList.length === 1) {
+         itemSel.selectedIndex = 1;
+         showInfo();
+      } else {
+         document.getElementById('info').style.display = 'none';
+      }
+    }
+
+    function getSelectedRenderedItem() {
+      const selectEl = document.getElementById('itemSelect');
+      if (!selectEl || selectEl.selectedIndex < 0) return null;
+      const opt = selectEl.options[selectEl.selectedIndex];
+      const itemKey = opt ? opt.getAttribute('data-item-key') : '';
+      return itemKey && CURRENT_RENDERED_ITEM_MAP[itemKey] ? CURRENT_RENDERED_ITEM_MAP[itemKey] : null;
+    }
+
+    function showInfo() {
+      const mode = document.getElementById('mode').value;
+      const selectEl = document.getElementById('itemSelect');
+      const selectedValue = selectEl.value;
+      const infoDiv = document.getElementById('info');
+      const selectedOption = selectEl.options[selectEl.selectedIndex] || null;
+      const selectedItemKey = `${mode}::${selectedOption ? (selectedOption.getAttribute('data-item-key') || selectedValue) : selectedValue}`;
+
+      if (selectedItemKey !== LAST_INFO_ITEM_KEY) {
+        INFO_NOTE_EXPANDED = false;
+        LAST_INFO_ITEM_KEY = selectedItemKey;
+      }
+      
+      if (!selectedValue) { infoDiv.style.display = 'none'; return; }
+
+      let item = getSelectedRenderedItem();
+      if (mode === 'consumable') {
+        item = item || inv.find(x => {
+          return x.name === selectEl.options[selectEl.selectedIndex].getAttribute('data-name');
+        });
+        if (!item) {
+             item = inv.find(x => `${x.name}` === selectedValue || x.name === selectedValue);
+        }
+      } else {
+        if (!item) {
+          const firstId = selectedValue.split(',')[0];
+          item = assets.find(x => x.id === firstId);
+        }
+      }
+
+      if (item) {
+        infoDiv.style.display = 'flex';
+        infoDiv.className = item.isSangha ? 'mode-sangha' : 'mode-normal';
+        const keeperName = String(item.keeper || '未設定').trim() || '未設定';
+        
+        const selText = selectedOption.text;
+        let balance = "0";
+        const match = selText.match(/[:：](\d+)/);
+        if (match) balance = match[1];
+
+        const locName = (item.location || '庫房').trim();
+        publishNineGridTarget(locName);
+
+        const cleanUrl = getDirectUrl(item.photoUrl);
+        const isValidImg = cleanUrl.indexOf('http') === 0 || cleanUrl.indexOf('data:image') === 0;
+        const noteHtml = renderInfoNote(item.note || '');
+
+        const imgHtml = isValidImg ? 
+          `<img src="${cleanUrl}" class="preview-img" 
+                onclick="zoomImg('${cleanUrl}')" 
+                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" 
+                style="cursor:zoom-in;">` + 
+          `<div class="preview-img" style="display:none; background:#e2e8f0; align-items:center; justify-content:center; color:#64748b; font-size:24px;">📦</div>` : 
+          `<div class="preview-img" style="background:#e2e8f0; display:flex; align-items:center; justify-content:center; color:#64748b; font-size:24px;">${item.isSangha ? '☸️' : '📦'}</div>`;
+
+        infoDiv.innerHTML = `
+          ${imgHtml}
+          <div class="info-detail">
+            ${item.isSangha ? '<div class="sangha-badge">☸️ 供僧專用物資</div>' : ''}
+            <div class="spec-text">規格型號：${item.spec || '標準'}</div>
+            <div class="spec-text">物品顏色：${item.color || '無'}</div>
+            ${mode === 'asset' ? `<div class="spec-text">固定保管人：${keeperName}</div>` : ''}
+            <div style="margin-bottom:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">📍 位置：
+              <span class="loc-tag" onclick="showMap('${locName}')">${locName} (圖解)</span>
+            </div>
+            ${noteHtml}
+            <div style="color:var(--primary); font-weight:900; font-size:1.2rem;">在庫餘額：${balance}</div>
+          </div>`;
+      } else {
+        infoDiv.style.display = 'none';
+      }
+    }
+
+    // 🚀 [已修復] 1. 修正語法錯誤 2. 確保加入時抓取地點
+    function add() {
+      const elSel = document.getElementById('itemSelect');
+      const elQty = document.getElementById('qty');
+      const elMode = document.getElementById('mode'); 
+
+      if (!elSel.value) return alert("⚠️ 請先選擇物品");
+
+      const qty = parseInt(elQty.value);
+      if (isNaN(qty) || qty <= 0) return alert("⚠️ 請輸入正確數量");
+
+      const selectedOption = elSel.options[elSel.selectedIndex];
+      const text = selectedOption.text;
+      const optName = selectedOption.dataset.name || text; 
+
+      const stockMatch = text.match(/[:：](\d+)/);
+      const currentStock = stockMatch ? parseInt(stockMatch[1]) : 0;
+
+      if (qty > currentStock) {
+        return alert(`❌ 庫存不足！目前僅剩 ${currentStock}`);
+      }
+
+      const displayName = text.replace(/\s*\(.*?\)\s*$/, ""); 
+
+      // 🔍 找地點
+      const renderedItem = getSelectedRenderedItem();
+      let currentLoc = "庫房";
+      if (elMode.value === 'asset') {
+        const firstId = elSel.value.split(',')[0];
+        const found = renderedItem || assets.find(x => x.id === firstId);
+         if (found && found.location) currentLoc = found.location;
+      } else {
+        const found = renderedItem || inv.find(x => x.name === optName);
+         if (found && found.location) currentLoc = found.location;
+      }
+
+      // 加入購物車
+      if (elMode.value === 'asset') {
+        const assetAction = getCurrentAssetAction();
+        // 偵測是否為超商/批次模式：單一 ID 但有多量 (item.count > 1)
+        const firstId = elSel.value.split(',')[0];
+        const foundItem = renderedItem || assets.find(x => String(x.id || '') === String(firstId)) || null;
+        if (!foundItem) {
+          assetsStale = true;
+          ensureAssetsLoaded();
+          return alert('⚠️ 這筆固定資產已不存在或已被異動，請重新選取。');
+        }
+        const outRule = foundItem.outRule || '僅借用';
+        if (assetAction === 'consume' && outRule === '僅借用') {
+          return alert('⛔ 這筆資產設定為「僅借用」，不可直接領用');
+        }
+        if (assetAction === 'borrow' && outRule === '僅領用') {
+          return alert('⛔ 這筆資產設定為「僅領用」，不可借用');
+        }
+        // 若來源列有 count > 1，視為可以用超商/批次模式處理（以數量扣減第14欄），
+        // 避免因 foundItem.ids 長度不同而錯過批次模式判定。
+        const isBatchId = (Number(foundItem.count) || 0) > 1;
+
+        cart.push({
+          itemName: optName,
+          assetIds: elSel.value,
+          quantity: qty,
+          type: 'asset',
+          displayName: displayName,
+          location: currentLoc,
+          keeper: foundItem.keeper || '',
+          isSangha: text.includes('☸️'),
+          supermarket: isBatchId, // 若為 true，後端會以數量扣除批次
+          assetAction: assetAction,
+          outRule: outRule
+        });
+      } else {
+        cart.push({
+          itemName: elSel.value,      
+          quantity: qty,
+          type: 'consumable',
+          displayName: displayName,
+          location: currentLoc, // ✅ 補上地點
+          spec: (renderedItem && renderedItem.spec) || '',
+          color: (renderedItem && renderedItem.color) || '',
+          isSangha: text.includes('☸️')
+        });
+      }
+      renderCart(); 
+      renderSelectFromSearch();
+      document.getElementById('info').style.display = 'none';
+      elQty.value = 1;
+    }
+
+    function validateCartAgainstCurrentData() {
+      function normalizeColorKey(v) {
+        const c = String(v || '').trim();
+        if (!c || c === '無') return '';
+        return c;
+      }
+
+      function buildConsumableKey(name, location, color) {
+        return [
+          String(name || '').trim(),
+          String(location || '').trim(),
+          normalizeColorKey(color)
+        ].join('||');
+      }
+
+      const issues = [];
+
+      cart.forEach(c => {
+        const reqQty = Number(c.quantity || c.qty || 1) || 1;
+
+        if (c.type === 'asset') {
+          const ids = String(c.assetIds || '').split(/[,，\s]+/).map(s => s.trim()).filter(Boolean);
+          const firstId = ids.length ? ids[0] : '';
+          const matched = assets.find(a => String(a.id || '') === String(firstId));
+
+          if (!matched) {
+            issues.push(`固定資產「${c.displayName || c.itemName}」已不在可借/領用清單`);
+            return;
+          }
+
+          const status = String(matched.status || '在庫').trim();
+          if (status !== '在庫') {
+            issues.push(`固定資產「${c.displayName || c.itemName}」目前狀態為「${status}」`);
+            return;
+          }
+
+          const avail = (typeof matched.count !== 'undefined')
+            ? (Number(matched.count) || 0)
+            : (Array.isArray(matched.ids) ? matched.ids.length : 1);
+          if (reqQty > avail) {
+            issues.push(`固定資產「${c.displayName || c.itemName}」可用量不足（要 ${reqQty}，剩 ${avail}）`);
+          }
+          return;
+        }
+
+    		const cartKey = buildConsumableKey(c.itemName, c.location, c.color);
+    		const invMatched = inv.find(x => buildConsumableKey(x.name, x.location, x.color) === cartKey);
+        if (!invMatched) {
+          issues.push(`十方供養物「${c.displayName || c.itemName}」已不在庫存清單`);
+          return;
+        }
+        const invQty = Number(invMatched.qty) || 0;
+        if (reqQty > invQty) {
+          issues.push(`十方供養物「${c.displayName || c.itemName}」庫存不足（要 ${reqQty}，剩 ${invQty}）`);
+        }
+      });
+
+      return issues;
+    }
+
+    function removeCartItem(index) {
+      cart.splice(index, 1);
+      renderCart();
+      renderSelectFromSearch();
+    }
+
+    // 🚀 [已修復] 在待領清單顯示 @ 地點
+    function renderCart() {
+      const list = document.getElementById('cartList');
+      const sub = document.getElementById('submitBtn');
+      
+      if (!cart.length) { 
+          list.innerHTML = '清單目前是空的'; 
+          sub.style.display='none'; 
+          return; 
+      }
+      
+      sub.style.display='block';
+      
+      list.innerHTML = cart.map((c, i) => `
+        <div class="cart-row">
+          <div style="flex:1;">
+             <div class="cart-item-name">${c.displayName || c.itemName} ${c.supermarket?'<span style="color:#b45309; font-weight:900; margin-left:6px;">(批次)</span>':''}</div>
+             <div style="font-size:0.8rem; color:#4338ca; font-weight:bold;">${c.type === 'asset' ? (c.assetAction === 'consume' ? '資產領用 (不歸還)' : '資產借用 (需歸還)') : '十方供養物領用'}</div>
+             ${c.type === 'asset' ? `<div style="font-size:0.82rem; color:#0f766e; font-weight:bold;">👤 保管人：${c.keeper || '未設定'}</div>` : ''}
+             <div style="font-size:0.85rem; color:#d97706; font-weight:bold;">@ ${c.location || '庫房'}</div>
+          </div>
+          <span style="color:var(--primary); margin-right:10px; font-weight:900;">x ${c.quantity || c.qty || 1}</span>
+           <button class="btn-del" onclick="removeCartItem(${i})">移除</button>
+        </div>`).join('');
+    }
+
+    function confirmAll() {
+      if (!cart.length) return alert('⚠️ 待領/借清單為空，請先加入物品');
+      const issues = validateCartAgainstCurrentData();
+      if (issues.length > 0) {
+        renderSelectFromSearch();
+        return alert('⚠️ 清單中的物品已變動，請重新確認後再送出：\n- ' + issues.slice(0, 3).join('\n- '));
+      }
+
+      const mode = document.getElementById('mode').value;
+      const rDateInput = document.getElementById('rDate'); 
+      const assetAction = getCurrentAssetAction();
+      
+      if (mode === 'asset' && assetAction === 'borrow') {
+        document.getElementById('assetFields').style.display = 'block';
+        const today = getToday();
+        rDateInput.min = today; 
+        rDateInput.value = ""; 
+        rDateInput.onchange = function() {
+          if (this.value && this.value < today) {
+            alert("❌ 歸還日期不可早於今天！");
+            this.value = ""; 
+          }
+        };
+      } else {
+        document.getElementById('assetFields').style.display = 'none';
+        rDateInput.value = '';
+      }
+      
+      document.getElementById('summary').innerHTML = cart.map(c => {
+        const base = `● ${c.displayName || c.itemName} x ${c.quantity || c.qty || 1}`;
+        if (c.type === 'asset') {
+          return `<div>${base}<br><small style="color:#0f766e;">👤 保管人：${c.keeper || '未設定'}</small></div>`;
+        }
+        return `<div>${base}</div>`;
+      }).join('');
+      document.getElementById('confirmBox').style.display = 'flex';
+    }
+
+    function applyOptimisticUpdate(items) {
+      if (!Array.isArray(items) || items.length === 0) return;
+
+      items.forEach(item => {
+        const qty = Number(item.quantity || item.qty || 1) || 1;
+
+        if (item.type === 'consumable') {
+          const target = inv.find(x => String(x.name || '') === String(item.itemName || ''));
+          if (target) {
+            target.qty = Math.max(0, (Number(target.qty) || 0) - qty);
+          }
+          return;
+        }
+
+        const idList = String(item.assetIds || '').split(/[,，\s]+/).map(s => s.trim()).filter(Boolean);
+        if (item.supermarket) {
+          const firstId = idList[0];
+          const target = assets.find(x => String(x.id || '') === String(firstId));
+          if (target) {
+            const nextCount = Math.max(0, (Number(target.count) || 0) - qty);
+            target.count = nextCount;
+            if (nextCount === 0) {
+              assets = assets.filter(x => String(x.id || '') !== String(firstId));
+            }
+          }
+          return;
+        }
+
+        const removeIds = new Set(idList.slice(0, qty));
+        assets = assets.filter(x => !removeIds.has(String(x.id || '')));
+      });
+
+      buildTree();
+      document.getElementById('info').style.display = 'none';
+      resetItemSelect('-- 請重新選擇物品 --');
+    }
+
+    async function submit() {
+      const receiver = document.getElementById('receiver').value;
+      const handler = document.getElementById('handler').value;
+      const rDate = document.getElementById('rDate').value;
+      const elMode = document.getElementById('mode').value;
+      const assetAction = getCurrentAssetAction();
+
+      if (!receiver || !handler) return alert("⚠️ 請填寫姓名");
+      if (elMode === 'asset' && assetAction === 'borrow' && !rDate) return alert("⚠️ 借用資產請填寫預計歸還日");
+      if (submitRequestPending) return alert("⏳ 上一筆仍在同步中，請稍候");
+      if (!cart.length) return alert("⚠️ 待領/借清單為空，請先加入物品");
+
+      const issues = validateCartAgainstCurrentData();
+      if (issues.length > 0) {
+        renderSelectFromSearch();
+        return alert('⚠️ 清單中的物品已變動，請重新確認後再送出：\n- ' + issues.slice(0, 3).join('\n- '));
+      }
+      
+      const btn = document.getElementById('goBtn');
+      submitRequestPending = true;
+      submitSlowWarned = false;
+      btn.disabled = true; 
+      const modeText = (elMode === 'asset')
+        ? (assetAction === 'consume' ? '資產領用' : '資產借出')
+        : '十方供養物領用';
+      btn.innerHTML = `🚀 ${modeText}彙整同步中...`;
+
+      if (submitWatchdog) clearTimeout(submitWatchdog);
+      submitWatchdog = setTimeout(() => {
+        if (!submitRequestPending) return;
+        btn.disabled = true;
+        btn.innerHTML = '⌛ 已送出，背景同步中...';
+        if (!submitSlowWarned) {
+          submitSlowWarned = true;
+          alert('⌛ 已送出成功，伺服器仍在處理中，請勿重複點擊。若超過 30 秒仍無回應，再到「最近捐贈/交易紀錄」確認結果。');
+        }
+      }, SUBMIT_TIMEOUT_MS);
+
+      const payload = {
+        receiver: receiver,
+        handler: handler,
+        note: "正常",
+        returnDate: rDate,
+        assetAction: assetAction,
+        items: cart
+      };
+      const submittedItems = cart.map(item => ({ ...item }));
+
+      google.script.run
+        .withSuccessHandler(res => {
+          submitRequestPending = false;
+          submitSlowWarned = false;
+          if (submitWatchdog) { clearTimeout(submitWatchdog); submitWatchdog = null; }
+          if (res && res.success) {
+            // ✅ 清除購物車和狀態
+            cart = [];
+            document.getElementById('receiver').value = '';
+            document.getElementById('handler').value = '';
+            document.getElementById('rDate').value = '';
+            document.getElementById('confirmBox').style.display = 'none';
+            
+            // ✅ 重置按鈕狀態
+            btn.disabled = false; 
+            btn.classList.remove('btn-success-mode');
+            btn.innerHTML = '確認送出';
+            btn.onclick = submit;
+            
+            // ✅ 顯示成功訊息
+            alert(`🎉 ${modeText}紀錄已存檔！\n通知將於背景稍後寄送。`);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            // ✅ 先做 optimistic UI，背景再同步最新資料
+            applyOptimisticUpdate(submittedItems);
+            renderCart();
+            assetsStale = true; // 標記資產需要重新載入
+            // 🔥 靜默預熱歸還頁快取（讓下次進入歸還頁更快）
+            google.script.run.withSuccessHandler(() => {}).withFailureHandler(() => {}).getBorrowedAssets();
+            loadData();
+          } else {
+            alert("❌ 同步失敗：" + getErrMsg(res)); 
+            btn.disabled = false; 
+            btn.innerHTML = '重試提交';
+          }
+        })
+        .withFailureHandler(err => {
+          submitRequestPending = false;
+          submitSlowWarned = false;
+          if (submitWatchdog) { clearTimeout(submitWatchdog); submitWatchdog = null; }
+          alert("❌ 系統錯誤：" + getErrMsg(err)); 
+          btn.disabled = false; 
+          btn.innerHTML = '重試提交';
+        })
+        .withdrawItem(payload); 
+    }
+
+    function showMap(locName) {
+      const cleanName = String(locName || '').trim();
+      if (!cleanName) {
+        alert('❌ 找不到位置名稱，請重新選取物品。');
+        return;
+      }
+
+      const room = ROOM_DATA[cleanName];
+      if (!room) {
+        alert(`❌ 找不到「${cleanName}」的位置資料，請檢查設定。`);
+        return;
+      }
+
+      let rawUrl = room.specificUrl;
+      if (!rawUrl && FLOOR_MAPS) rawUrl = FLOOR_MAPS[room.floor] || '';
+      if (!rawUrl) {
+        alert('❌ 這個位置沒有設定地圖連結。');
+        return;
+      }
+
+      const img = document.getElementById('mapImg');
+      const highlight = document.getElementById('mapHighlight');
+      const loadingText = document.getElementById('loadingText');
+      const modal = document.getElementById('mapModal');
+      const title = document.getElementById('mapTitle');
+
+      title.innerText = '📍 區域：' + cleanName;
+      loadingText.innerText = '地圖讀取中...';
+      highlight.style.display = 'none';
+      modal.style.display = 'flex';
+      img.referrerPolicy = 'no-referrer';
+
+      img.onload = function() {
+        highlight.style.left = room.x + '%';
+        highlight.style.top = room.y + '%';
+        highlight.style.width = room.w + '%';
+        highlight.style.height = room.h + '%';
+        highlight.style.display = 'block';
+        loadingText.innerText = '';
+      };
+
+      img.onerror = function() {
+        loadingText.innerHTML = '❌ <b>載入失敗</b><br>請確認連結權限已設為公開';
+      };
+
+      img.src = getDirectUrl(rawUrl);
+    }
+
+    function resetModeView() {
+      cart = [];
+      renderCart();
+      document.getElementById('info').style.display = 'none';
+      hideCabinetPanel();
+      refreshAssetActionUi();
+      // 切換模式時只重建選單，避免重複拉資料
+      const mode = document.getElementById('mode').value;
+      if (inv.length === 0) {
+        loadData();
+      } else if (mode === 'asset') {
+        ensureAssetsLoaded();
+      } else {
+        buildTree();
+      }
+    }
+    initLocation(); loadData(); startVersionPolling(); refreshAssetActionUi();
+    function renderTopNav() {
+      const items = [
+        { key: 'index',        label: '🏠 主選單' },
+        { key: 'recent',       label: '📋 最近捐贈' },
+        { key: 'near-expiry',  label: '⏰ 即期品' },
+        { key: 'withdraw',     label: '📤 領借用' },
+        { key: 'asset_return', label: '🔙 歸還' },
+        { key: 'asset_entry',  label: '🛠️ 入庫' },
+        { key: 'inventory',    label: '📊 總覽' }
+      ];
+      document.getElementById('topNav').innerHTML = items
+        .map(it => `<a class="${it.key === 'withdraw' ? 'active' : ''}" target="_top" href="${it.key}.html">${it.label}</a>`)
+        .join('');
+    }
+
+    renderTopNav();
+
+    function zoomImg(src) {
+    const modal = document.getElementById('image-modal');
+    const modalImg = document.getElementById('modal-img-zoom');
+    modalImg.src = src;
+    modal.style.display = 'flex';
+    }
+  </script>
+</body>
+</html>

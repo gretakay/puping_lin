@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>🛠️ 固定資產建檔入庫</title>
+  <style>
+    :root { --primary: #1976D2; --success: #2e7d32; --danger: #d32f2f; --text-main: #2d3748; }
+    body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; padding: 98px 20px 120px; margin: auto; line-height: 1.6; background-color: #f0f2f5; color: var(--text-main); }
+    h1 { color: var(--primary); text-align: center; margin-bottom: 20px; font-weight: 800; }
+    
+    form { 
+      background: white; padding: 25px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+      max-width: 800px; margin: auto; border: 1px solid #e2e8f0;
+    }
+
+    @keyframes success-pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.01); background: #f0fff4; }
+      100% { transform: scale(1); }
+    }
+    .form-success { animation: success-pulse 0.4s ease-out; }
+
+    label { display: block; margin-top: 15px; font-weight: 900; color: #1a202c; font-size: 1rem; }
+    input, select { width: 100%; padding: 14px; margin: 8px 0; box-sizing: border-box; border: 2px solid #cbd5e0; border-radius: 10px; font-size: 16px; outline: none; font-weight: 500; color: #000; scroll-margin-bottom: 180px; }
+    input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1); }
+
+    .search-hint { font-size: 0.8rem; color: #718096; margin-top: -5px; margin-bottom: 10px; font-weight: 700; }
+
+    .loader { border: 3.5px solid #f3f3f3; border-top: 3.5px solid var(--primary); border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 8px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    @media (min-width: 600px) {
+      #asset-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 25px; }
+      h1, .full-width, #submit-btn, #msg, .photo-area { grid-column: span 2; }
+    }
+
+    button { width: 100%; padding: 18px; background: var(--primary); color: white; border: none; cursor: pointer; font-size: 1.1rem; border-radius: 12px; font-weight: 900; margin-top: 25px; transition: 0.2s; box-shadow: 0 4px 10px rgba(25, 118, 210, 0.3); }
+    button:hover { background: #1565C0; transform: translateY(-1px); }
+    button:disabled { background: #cbd5e0; cursor: not-allowed; }
+    .action-dock {
+      position: fixed;
+      left: 50%;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+      transform: translateX(-50%);
+      width: min(calc(100% - 24px), 800px);
+      display: flex;
+      padding: 12px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid rgba(226,232,240,0.95);
+      box-shadow: 0 18px 40px rgba(15,23,42,0.12);
+      backdrop-filter: blur(10px);
+      z-index: 5000;
+      box-sizing: border-box;
+    }
+    #submit-btn {
+      width: 100%;
+      margin-top: 0;
+      box-shadow: 0 10px 24px rgba(25, 118, 210, 0.25);
+    }
+
+    #msg { margin-top: 25px; text-align: center; padding: 15px; border-radius: 12px; font-weight: 800; display: none; }
+    .top-dock {
+      position: fixed;
+      left: 50%;
+      top: 10px;
+      transform: translateX(-50%);
+      width: min(calc(100% - 24px), 800px);
+      padding: 8px 10px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.94);
+      border: 1px solid rgba(203,213,224,0.95);
+      box-shadow: 0 10px 26px rgba(15,23,42,0.1);
+      backdrop-filter: blur(8px);
+      z-index: 900;
+      box-sizing: border-box;
+    }
+    .top-nav { display: flex; gap: 8px; flex-wrap: wrap; overflow-x: visible; justify-content: center; align-items: center; width: 100%; box-sizing: border-box; margin: 4px 0 14px; padding: 2px 0 6px; }
+    .top-nav::-webkit-scrollbar { display: none; }
+    .top-nav a { flex: 0 0 auto; white-space: nowrap; text-align: center; text-decoration: none; color: #334155; background: #e2e8f0; border: 1px solid #cbd5e1; padding: 7px 12px; border-radius: 999px; font-weight: 800; font-size: 13px; }
+    .top-nav a.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+    .top-nav { margin: 0; padding: 0; }
+    .page-tip { max-width: 800px; margin: -6px auto 14px; padding: 10px 12px; border-radius: 12px; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; font-size: 0.88rem; font-weight: 700; }
+    .nav-box { display: none; }
+    
+    .photo-area { background: #f8fafc; padding: 20px; border-radius: 12px; border: 2px dashed #cbd5e0; margin-top: 20px; text-align: center; }
+    #previewImg { max-width: 140px; max-height: 140px; border-radius: 10px; margin-top: 12px; display: none; border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+    /* 補貨區塊樣式 */
+    .restock-area { grid-column: span 2; background: #fffaf0; padding: 15px; border-radius: 12px; border: 2px dashed #ed8936; margin-bottom: 20px; }
+    .input-with-btn { display: flex; gap: 10px; }
+    .btn-search { width: auto; margin-top: 8px; padding: 0 20px; background: #ed8936; box-shadow: none; }
+    .btn-search:hover { background: #dd6b20; }
+
+    /* 🟢 確認彈窗樣式 */
+    #confirmModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+    .confirm-content { background: white; width: 90%; max-width: 450px; border-radius: 20px; padding: 30px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #e2e8f0; }
+    .confirm-title { font-size: 1.5rem; font-weight: 900; margin-bottom: 15px; color: #1a202c; }
+    .confirm-details { background: #f7fafc; padding: 15px; border-radius: 12px; text-align: left; margin-bottom: 20px; border: 1px solid #e2e8f0; }
+    .confirm-row { display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 8px; }
+    .confirm-label { color: #718096; font-weight: bold; }
+    .confirm-val { color: #2d3748; font-weight: 800; }
+    .btn-group { display: flex; gap: 15px; margin-top: 20px; }
+    .btn-cancel { background: #e2e8f0; color: #4a5568; }
+    .btn-cancel:hover { background: #cbd5e0; }
+    .btn-confirm { background: var(--success); color: white; }
+    .btn-confirm:hover { background: #276749; }
+
+    @media (max-width: 600px) {
+      body { padding: 104px 12px 136px; }
+      form { padding: 16px; }
+      .restock-area { grid-column: span 1; }
+      .input-with-btn { flex-direction: column; }
+      .btn-search { width: 100%; padding: 14px; }
+      .page-tip { font-size: 0.82rem; margin-bottom: 12px; }
+      .top-dock { width: calc(100% - 24px); }
+      .action-dock { width: calc(100% - 24px); padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-dock">
+    <div id="topNav" class="top-nav"></div>
+  </div>
+  <h1>🛠️ 固定資產建檔入庫</h1>
+  <div class="page-tip">補貨請先查舊資產；超商模式不限制最大入庫數，若照片背景同步失敗，頁面會保留明確提示。</div>
+  
+  <form id="asset-form" novalidate>
+    
+    <div class="restock-area">
+      <label style="margin-top:0; color:#c05621;">📦 自訂主編號 / 補貨續號 (選填)：</label>
+      <div class="input-with-btn">
+        <input type="text" name="customId" id="customIdInput" placeholder="例如: OTT26001 (留空則自動生成)">
+        <button type="button" class="btn-search" onclick="openSearchModal()">🔍 查詢舊資產</button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+        <input type="checkbox" name="isBatch" id="isBatchMode" style="width: 20px; height: 20px; margin: 0;">
+        <label for="isBatchMode" style="margin: 0; color: #744210; cursor: pointer;">
+          📖 超商模式 (同批共用主號，系統沿用)
+        </label>
+      </div>
+    </div>
+
+    <label>來源類別：</label>
+    <select name="sourceType">
+	  <option value="既有資產">既有資產 (補登入庫)</option>
+      <option value="中台申請">中台申請 (撥發)</option>
+      <option value="採購">採購入庫</option>
+    </select>
+
+    <label>出庫規則：</label>
+    <select name="outRule">
+      <option value="僅借用" selected>僅借用 (需歸還)</option>
+      <option value="可借可領">可借可領</option>
+      <option value="僅領用">僅領用 (不歸還)</option>
+    </select>
+    
+    <label>物品名稱：</label>
+    <input type="text" name="itemName" id="itemNameInput" required placeholder="例如：投影機、吸塵器">
+    
+    <div>
+      <label>顏色規格：</label>
+      <input type="text" name="color" placeholder="例如：黑色、白色">
+    </div>
+
+    <div>
+      <label>單位：</label>
+      <input type="text" name="unit" placeholder="例如：台、個、組">
+    </div>
+    
+    <label class="full-width">規格型號：</label>
+    <input type="text" name="spec" class="full-width" placeholder="例如：型號或尺寸參數">
+    
+    <div class="full-width">
+      <label>📍 存放位置 (支援快速搜尋) <span style="color: #d32f2f;">*</span>：</label>
+      <input type="text" name="location" id="locationInput" list="locList" required placeholder="打字搜尋位置，例如：B1或櫃號">
+      <p class="search-hint">💡 提示：位置名稱須與 LocationSettings 中的位置名稱相符。</p>
+      <datalist id="locList"></datalist>
+    </div>
+    
+    <label>固定保管人 <span style="color: var(--danger);">*</span>：</label>
+    <input type="text" name="keeper" required placeholder="輸入保管單位或人員 (必填)">
+    
+    <label style="color: #c53030;">建檔數量 (批次)：</label>
+    <input type="number" name="assetQty" id="assetQty" value="1" min="1" max="100" required>
+    <div id="qtyHint" class="search-hint">一般模式上限 100；勾選超商模式後不限制最大入庫數。</div>
+    
+    <script>
+      // 🚀 動態移除/恢復 max 限制基於超商模式
+      const isBatchInput = document.getElementById('isBatchMode');
+      const assetQtyInput = document.getElementById('assetQty');
+      function updateQtyMax() {
+        if (!isBatchInput || !assetQtyInput) return;
+        if (isBatchInput.checked) {
+          assetQtyInput.removeAttribute('max');
+          assetQtyInput.style.borderColor = '#d97706';
+          const hint = document.getElementById('qtyHint');
+          if (hint) hint.textContent = '超商模式已啟用：不限制最大入庫數。';
+        } else {
+          assetQtyInput.setAttribute('max', '100');
+          assetQtyInput.style.borderColor = '#cbd5e0';
+          const hint = document.getElementById('qtyHint');
+          if (hint) hint.textContent = '一般模式上限 100；勾選超商模式後不限制最大入庫數。';
+        }
+      }
+      if (isBatchInput && assetQtyInput) {
+        isBatchInput.addEventListener('change', updateQtyMax);
+        updateQtyMax();
+      }
+    </script>
+
+    <div class="photo-area">
+      <label style="margin-top:0; color:var(--primary);">📸 資產拍照：</label>
+      <input type="file" id="cameraInput" accept="image/*">
+      <div id="photoStatus" style="font-size: 0.85rem; font-weight: 800; color: #4a5568; margin-top: 8px;">⏳ 尚未選取照片 (選填)</div>
+      <img id="previewImg" src="">
+      <input type="hidden" name="photoUrl" id="hiddenPhotoUrl">
+    </div>
+    
+    <label class="full-width">備註：</label>
+    <input type="text" name="note" class="full-width" placeholder="備註說明">
+
+    <!-- 連續建檔功能已移除 -->
+  </form>
+
+  <div id="msg"></div>
+  <div class="action-dock">
+    <button type="submit" form="asset-form" id="submit-btn">✅ 確認資料正確，送出建檔</button>
+  </div>
+
+  <div id="searchModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(3px);">
+    <div style="background: white; width: 90%; max-width: 500px; border-radius: 16px; padding: 20px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; max-height: 80vh;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3 style="margin: 0; color: #334155;">🔍 搜尋現有資產 (補貨)</h3>
+        <button type="button" onclick="closeSearchModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #94a3b8; width: auto; margin: 0;">&times;</button>
+      </div>
+      <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+        <input type="text" id="searchKeyword" placeholder="輸入名稱或編號..." style="flex: 1; padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; margin: 0;" onkeypress="if(event.key === 'Enter') executeSearch()">
+        <button type="button" onclick="executeSearch()" style="background: #3b82f6; color: white; border: none; padding: 0 15px; border-radius: 10px; font-weight: bold; cursor: pointer; width: auto; margin: 0;">找資產</button>
+        <button type="button" onclick="executeSearch(true)" style="background: #ef4444; color: white; border: none; padding: 0 12px; border-radius: 10px; font-weight: bold; cursor: pointer; width: auto; margin: 0;" title="搜尋不到？點此強制讀取最新資料">🔄 重整</button>
+      </div>
+      <div style="font-size: 12px; color: #64748b; margin: -6px 0 12px; line-height: 1.5;">若同品名出現在不同位置，系統會分開列出，請點選正確位置後再補貨。</div>
+      <div id="searchResultList" style="flex: 1; overflow-y: auto; border: 1px solid #f1f5f9; border-radius: 10px; padding: 5px;">
+        <div style="text-align: center; color: #cbd5e0; padding: 30px;">請輸入關鍵字並搜尋</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirmModal">
+    <div class="confirm-content">
+      <div class="confirm-title" id="confirmTitle">🚀 確認建檔</div>
+      <div class="confirm-details">
+        <div class="confirm-row"><span class="confirm-label">模式：</span><span class="confirm-val" id="c_mode" style="color:#d35400;"></span></div>
+        <div class="confirm-row"><span class="confirm-label">品名：</span><span class="confirm-val" id="c_name"></span></div>
+        <div class="confirm-row"><span class="confirm-label">主編號：</span><span class="confirm-val" id="c_id"></span></div>
+        <div class="confirm-row"><span class="confirm-label">新增數量：</span><span class="confirm-val" id="c_qty" style="color:var(--primary); font-size:1.2rem;"></span></div>
+        <div class="confirm-row"><span class="confirm-label">出庫規則：</span><span class="confirm-val" id="c_rule"></span></div>
+        <div class="confirm-row"><span class="confirm-label">存放位置：</span><span class="confirm-val" id="c_loc"></span></div>
+        <div class="confirm-row"><span class="confirm-label">保管人：</span><span class="confirm-val" id="c_keeper"></span></div>
+        <div class="confirm-row"><span class="confirm-label">照片上傳：</span><span class="confirm-val" id="c_photo"></span></div>
+      </div>
+      <div class="btn-group">
+        <button type="button" class="btn-cancel" onclick="closeConfirmModal()">❌ 取消修改</button>
+        <button type="button" class="btn-confirm" onclick="finalSubmit()">✅ 確定入庫</button>
+      </div>
+    </div>
+  </div>
+
+<script src="./gas-polyfill.js"></script>
+<script>
+  // XSS 防護
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // 安全擷取錯誤訊息
+  function getErrMsg(err) {
+    try {
+      if (!err) return '未知錯誤';
+      if (typeof err === 'string') return err;
+      if (err.message) return err.message;
+      if (err.toString) return err.toString();
+      return JSON.stringify(err);
+    } catch (e) { return '未知錯誤'; }
+  }
+
+  // LOG wrapper
+  window.DEBUG = window.DEBUG || false;
+  const LOG = { debug: (...a) => { if (window.DEBUG) console.log(...a); }, info: (...a) => { if (window.DEBUG) console.info(...a); }, error: (...a) => console.error(...a) };
+
+  const form = document.getElementById('asset-form');
+  const btn = document.getElementById('submit-btn');
+  const msg = document.getElementById('msg');
+  const cameraInput = document.getElementById('cameraInput'); // 確認這裡有抓到元素
+  const hiddenPhotoUrl = document.getElementById('hiddenPhotoUrl');
+  const photoStatus = document.getElementById('photoStatus');
+  const locList = document.getElementById('locList');
+  let currentSearchResults = [];
+  let lastSearchKeyword = '';
+
+  window.onload = function() {
+    function renderTopNav() {
+      const items = [
+        { key: 'index',        label: '🏠 主選單' },
+        { key: 'recent',       label: '📋 最近捐贈' },
+        { key: 'near-expiry',  label: '⏰ 即期品' },
+        { key: 'withdraw',     label: '📤 領借用' },
+        { key: 'asset_return', label: '🔙 歸還' },
+        { key: 'asset_entry',  label: '🛠️ 入庫' },
+        { key: 'inventory',    label: '📊 總覽' }
+      ];
+      document.getElementById('topNav').innerHTML = items
+        .map(it => `<a class="${it.key === 'asset_entry' ? 'active' : ''}" target="_top" href="${it.key}.html">${it.label}</a>`)
+        .join('');
+    }
+
+    renderTopNav();
+
+    google.script.run.withSuccessHandler(list => {
+      locList.innerHTML = "";
+      list.forEach(loc => {
+        const opt = document.createElement('option');
+        opt.value = loc;
+        locList.appendChild(opt);
+      });
+    }).getLocationList();
+
+    // debounce helper for search-as-you-type
+    function debounce(fn, wait) {
+      let t;
+      return function(...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); };
+    }
+
+    const sk = document.getElementById('searchKeyword');
+    if (sk) {
+      const debouncedSearch = debounce(() => { const v = sk.value.trim(); if (v) executeSearch(false); }, 300);
+      sk.addEventListener('input', debouncedSearch);
+    }
+  };
+
+  // --- 照片處理邏輯 (修正版) ---
+  if (cameraInput) {
+    cameraInput.addEventListener('change', function(e) {
+      console.log("檔案變更觸發！");
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      btn.disabled = true;
+      if (photoStatus) {
+         photoStatus.innerHTML = "⌛ 正在讀取並壓縮照片...";
+         photoStatus.style.color = "#d69e2e";
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const img = new Image();
+        img.onerror = function() {
+          if (photoStatus) {
+            photoStatus.innerHTML = "❌ 圖片解析失敗，請改用另一張或重新拍攝";
+            photoStatus.style.color = "#c53030";
+          }
+          btn.disabled = false;
+        };
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const max_size = 800; // 稍微加大解析度
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > max_size) { height *= max_size / width; width = max_size; }
+          } else {
+            if (height > max_size) { width *= max_size / height; height = max_size; }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          const previewImg = document.getElementById('previewImg');
+          if(previewImg) {
+             previewImg.src = dataUrl;
+             previewImg.style.display = 'inline-block';
+          }
+          if(hiddenPhotoUrl) hiddenPhotoUrl.value = dataUrl;
+          
+          const kbSize = Math.round(dataUrl.length / 1024);
+          if (photoStatus) {
+             photoStatus.innerHTML = `✅ 照片已就緒 (約 ${kbSize} KB)`;
+             photoStatus.style.color = "#2e7d32";
+          }
+          btn.disabled = false;  
+        };
+        img.src = event.target.result;
+      };
+      reader.onerror = function() {
+        if (photoStatus) {
+          photoStatus.innerHTML = "❌ 讀取照片失敗，請重新選取";
+          photoStatus.style.color = "#c53030";
+        }
+        btn.disabled = false;
+      };
+      reader.readAsDataURL(file);
+    });
+  } else {
+    console.error("❌ 錯誤：找不到 cameraInput 元素");
+  }
+
+  // --- 搜尋模組 ---
+  function openSearchModal() {
+    const modal = document.getElementById('searchModal');
+    const sk = document.getElementById('searchKeyword');
+    const list = document.getElementById('searchResultList');
+    if (sk) { sk.value = lastSearchKeyword || ''; }
+    if (list) { list.innerHTML = '<div style="text-align:center; color:#94a3b8; padding:30px;">請輸入關鍵字並搜尋</div>'; }
+    modal.style.display = 'flex';
+    if (sk) sk.focus();
+  }
+  function closeSearchModal() { document.getElementById('searchModal').style.display = 'none'; }
+
+  function getPureLocation(item) {
+    const keeper = String((item && item.keeper) || '').trim();
+    let loc = String((item && (item.location || item.displayLoc)) || '').trim();
+    if (!loc) return '';
+
+    if (keeper) {
+      const re1 = new RegExp('\\\\s*\\\\(' + keeper.replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&') + '\\\\)\\\\s*$');
+      const re2 = new RegExp('\\\\s*（' + keeper.replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&') + '）\\\\s*$');
+      loc = loc.replace(re1, '').replace(re2, '').trim();
+    }
+    return loc;
+  }
+
+  function executeSearch(force = false) {
+    const skEl = document.getElementById('searchKeyword');
+    let kw = String((skEl && skEl.value) || '').trim();
+
+    // 按「重整」時若輸入框是空的，沿用上次關鍵字，避免使用者每次重整都要重打
+    if (!kw && force && lastSearchKeyword) {
+      kw = lastSearchKeyword;
+      if (skEl) skEl.value = kw;
+    }
+
+    if (!kw) return alert("請輸入關鍵字");
+    lastSearchKeyword = kw;
+    
+    const list = document.getElementById('searchResultList');
+    const loadMsg = force ? '正在強制重讀資料庫...<br><small style="color:#94a3b8; font-weight:normal; margin-top:5px; display:block;">首次讀取約需 5-8 秒</small>' : '正在搜尋...<br><small style="color:#94a3b8; font-weight:normal; margin-top:5px; display:block;">使用快取，通常 1-2 秒</small>';
+    list.innerHTML = `<div style="text-align:center; padding:20px; color:#64748b;"><div class="loader"></div><br>${loadMsg}</div>`;
+
+    const startTime = Date.now();
+    google.script.run.withSuccessHandler(results => {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      LOG.debug(`🔍 查詢完成，耗時 ${elapsed} 秒，找到 ${results.length} 筆結果`);
+      currentSearchResults = Array.isArray(results) ? results : [];
+      list.innerHTML = '';
+      if (results.length === 0) {
+        list.innerHTML = '<div style="text-align:center; padding:30px; color:#ef4444;">❌ 找不到相關資產<br><small>若是剛建檔，請點選上方紅色[重整]按鈕</small></div>';
+        return;
+      }
+      results.forEach(item => {
+        const pureLoc = getPureLocation(item) || '未設定';
+        const div = document.createElement('div');
+        div.style.cssText = "padding: 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: 0.2s;";
+        div.onmouseover = function() { this.style.backgroundColor = "#eff6ff"; };
+        div.onmouseout = function() { this.style.backgroundColor = "transparent"; };
+        div.innerHTML = `
+          <div style="font-weight: bold; color: #1e293b; font-size: 16px;">${item.name}</div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+            <span style="background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 6px; font-size: 14px; font-weight: bold;">${item.baseId}</span>
+            <span style="color: #64748b; font-size: 13px;">現有庫存: ${item.count}</span>
+          </div>
+          <div style="color: #0f172a; font-size: 12px; margin-top: 6px; font-weight: 800;">📍 位置：${pureLoc}</div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+            <span style="background:#f8fafc; color:#475569; border:1px solid #e2e8f0; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700;">規格：${item.spec || '無'}</span>
+            <span style="background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700;">保管：${item.keeper || '未設定'}</span>
+          </div>
+          <div style="color:#2563eb; font-size:12px; margin-top:8px; font-weight:800;">點此帶入這個位置的補貨資料</div>
+        `;
+        div.onclick = function() { selectAssetForRestock(item); };
+        list.appendChild(div);
+      });
+    }).withFailureHandler(err => {
+      list.innerHTML = '<div style="text-align:center; padding:30px; color:#ef4444; font-weight:900;">❌ 查詢失敗：' + getErrMsg(err) + '<br><small style="margin-top:10px; display:block;">請重試或聯繫管理員</small></div>';
+    }).searchAssetForRestock(kw, force);
+  }
+
+  function selectAssetForRestock(item) {
+    const pureLoc = getPureLocation(item) || item.location || item.displayLoc || '未設定';
+    const sameNameResults = currentSearchResults.filter(x => String(x.name || '') === String(item.name || ''));
+    if (sameNameResults.length > 1) {
+      const ok = window.confirm(
+        `目前找到 ${sameNameResults.length} 筆同品名資料。\n\n` +
+        `這次要補貨的位置是：${pureLoc}\n` +
+        `主編號：${item.baseId}\n\n` +
+        `確認要帶入這一筆嗎？`
+      );
+      if (!ok) return;
+    }
+
+    document.getElementById('customIdInput').value = item.baseId;
+    
+    const setVal = (name, val) => {
+      const el = form.querySelector(`[name="${name}"]`);
+      if (el) {
+        el.value = val;
+        el.style.backgroundColor = "#fffde7";
+        setTimeout(() => el.style.backgroundColor = "white", 800);
+      }
+    };
+    setVal('itemName', item.name);
+    setVal('spec', item.spec);
+    setVal('color', item.color);
+    setVal('unit', item.unit);
+    setVal('outRule', item.outRule || '僅借用');
+    setVal('keeper', item.keeper);
+    setVal('location', pureLoc);
+    setVal('assetQty', 1);
+
+    if (item.photoUrl && item.photoUrl !== "無照片") {
+       const preview = document.getElementById('previewImg');
+       if (preview) {
+          let showUrl = item.photoUrl;
+          if (showUrl.indexOf('drive.google.com') > -1) {
+             try { const match = showUrl.match(/\/d\/([a-zA-Z0-9_-]+)/); if (match) showUrl = "https://drive.google.com/thumbnail?id=" + match[1] + "&sz=w400"; } catch(e){}
+          }
+          preview.src = showUrl;
+          preview.style.display = 'inline-block';
+          if (photoStatus) photoStatus.innerHTML = "💡 顯示同款舊品照片供參考";
+       }
+    }
+
+    const batchCb = document.getElementById('isBatchMode');
+    if (batchCb) {
+      batchCb.checked = true;
+      updateQtyMax();
+      batchCb.parentElement.style.backgroundColor = "#fef3c7";
+      setTimeout(() => { batchCb.parentElement.style.backgroundColor = "#fffaf0"; }, 1000);
+    }
+    closeSearchModal();
+  }
+
+  // --- 確認視窗與送出 ---
+  let pendingFormData = null;
+
+  function focusToField(el) {
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => {
+      try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+    }, 120);
+  }
+
+  function focusAndReportFirstInvalid(formEl) {
+    if (!formEl) return false;
+    if (formEl.checkValidity()) return true;
+    const firstInvalid = formEl.querySelector('input:invalid, select:invalid, textarea:invalid');
+    if (firstInvalid) {
+      focusToField(firstInvalid);
+      firstInvalid.reportValidity();
+    }
+    return false;
+  }
+
+  function closeConfirmModal() {
+    document.getElementById('confirmModal').style.display = 'none';
+  }
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    if (!focusAndReportFirstInvalid(form)) {
+      return;
+    }
+    
+    const formEl = new FormData(this);
+    pendingFormData = Object.fromEntries(formEl);
+    pendingFormData.isBatch = document.getElementById('isBatchMode').checked;
+    
+    const customId = pendingFormData.customId ? pendingFormData.customId : "(系統自動生成)";
+    const isBatch = pendingFormData.isBatch;
+    
+    let modeText = "🆕 全新建立 (獨立序號)";
+    if (pendingFormData.customId && isBatch) {
+      modeText = "📚 超商補貨 (沿用主號)";
+    } else if (pendingFormData.customId) {
+      modeText = "📥 補貨續號 (接續舊編號)";
+    } else if (isBatch) {
+      modeText = "📚 超商模式 (共用主號)";
+    }
+
+    document.getElementById('c_mode').innerText = modeText;
+    document.getElementById('c_name').innerText = pendingFormData.itemName;
+    document.getElementById('c_id').innerText = customId;
+    document.getElementById('c_qty').innerText = pendingFormData.assetQty;
+    document.getElementById('c_rule').innerText = pendingFormData.outRule || '僅借用';
+    document.getElementById('c_loc').innerText = pendingFormData.location;
+    document.getElementById('c_keeper').innerText = pendingFormData.keeper;
+    const photoData = hiddenPhotoUrl && hiddenPhotoUrl.value ? hiddenPhotoUrl.value : '';
+    const photoKb = photoData ? Math.round(photoData.length / 1024) : 0;
+    document.getElementById('c_photo').innerText = photoData ? `已選擇 (約 ${photoKb} KB)` : '未上傳';
+
+    document.getElementById('confirmModal').style.display = 'flex';
+  });
+
+  function finalSubmit() {
+    closeConfirmModal();
+    
+    btn.disabled = true;
+    btn.innerHTML = '<div class="loader"></div> 正在產出資產編號...';
+    msg.style.display = "block";
+    msg.style.background = "#ebf8ff";
+    msg.style.color = "#2b6cb0";
+    msg.innerHTML = "⏳ 正在執行快速建檔，請稍後...";
+
+    const photoData = hiddenPhotoUrl.value; 
+
+    google.script.run
+      .withSuccessHandler(res => {
+        if(res.success) {
+          form.classList.add('form-success');
+          setTimeout(() => form.classList.remove('form-success'), 500);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          
+          msg.style.background = "#f0fff4";
+          msg.style.color = "#276749";
+          msg.innerHTML = `🏆 <b>建檔成功！</b><br>編號：<span style="color:#2196F3; font-size:1.2em;">${escapeHtml(String(res.id || ''))}</span> <br><small>📍 位置：${escapeHtml(pendingFormData.location)}</small>`;
+          
+          resetUI(pendingFormData);
+
+          if (photoData && photoData.length > 0) {
+            // 傳回的 res.sheet 為實際更新的工作表 key（合併時可能不同於使用者選的 location）
+            const sheetKeyForPhoto = res.sheet || pendingFormData.location;
+            google.script.run
+              .withSuccessHandler(imgRes => {
+                if (imgRes && imgRes.success) {
+                  msg.innerHTML += `<br> ✅ 圖片已就緒`;
+                } else {
+                  const err = (imgRes && (imgRes.error || imgRes.message)) || '未知錯誤';
+                  msg.innerHTML += `<br> ⚠️ 圖片未上傳成功：${err}`;
+                }
+              })
+              .withFailureHandler(err => {
+                msg.innerHTML += `<br> ⚠️ 圖片背景同步失敗：${getErrMsg(err)}`;
+              })
+              .updateAssetPhotoInBackground(res.row, photoData, pendingFormData.itemName, pendingFormData.spec, sheetKeyForPhoto);
+          }
+        } else {
+          msg.style.background = "#fff5f5";
+          msg.style.color = "#c53030";
+          msg.textContent = "❌ 建檔失敗：" + getErrMsg(res);
+          btn.disabled = false;
+          btn.innerHTML = "✅ 確認資料正確，送出建檔";
+        }
+      })
+      .withFailureHandler(err => {
+        btn.disabled = false;
+        btn.innerHTML = "✅ 確認資料正確，送出建檔";
+        msg.textContent = "⚠️ 網路通訊錯誤：" + getErrMsg(err);
+      })
+      .importAssetFast(pendingFormData); 
+  }
+
+  function resetUI(formData) {
+    // 重置表單，但保留位置、保管人、來源與單位（不再保留品名等）
+    const keepLoc = formData.location;
+    const keepKeeper = formData.keeper;
+    const keepSource = formData.sourceType;
+    const keepRule = formData.outRule;
+    const keepUnit = formData.unit;
+
+    form.reset();
+
+    if (photoStatus) {
+      photoStatus.innerHTML = "⏳ 尚未選取照片 (選填)";
+      photoStatus.style.color = "#4a5568";
+    }
+    const preview = document.getElementById('previewImg');
+    if (preview) { preview.src = ""; preview.style.display = 'none'; }
+    hiddenPhotoUrl.value = "";
+    if (cameraInput) cameraInput.value = ""; 
+
+    form.location.value = keepLoc;
+    form.keeper.value = keepKeeper;
+    form.sourceType.value = keepSource;
+    form.outRule.value = keepRule;
+    form.unit.value = keepUnit;
+
+    btn.disabled = false;
+    btn.innerHTML = "✅ 確認資料正確，送出建檔";
+    document.getElementById('itemNameInput').focus();
+  }
+</script>
+</body>
+</html>

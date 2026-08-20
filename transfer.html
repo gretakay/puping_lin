@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>資產位置移轉</title>
+  <style>
+    :root { --primary: #0f766e; --bg: #f7fafc; --card: #ffffff; --text: #1e293b; --muted: #64748b; --line: #e2e8f0; --danger: #dc2626; --accent: #14b8a6; }
+    body { margin: 0; padding: 96px 16px 120px; font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; background: linear-gradient(180deg, #f0fdfa 0%, var(--bg) 34%, #eef2ff 100%); color: var(--text); }
+    h1 { margin: 0 0 12px; text-align: center; font-size: 1.8rem; font-weight: 900; }
+    .sub { max-width: 1100px; margin: 0 auto 16px; color: var(--muted); font-weight: 700; text-align: center; }
+    .top-dock, .panel, .result-card { background: rgba(255,255,255,0.94); border: 1px solid rgba(226,232,240,0.9); box-shadow: 0 12px 30px rgba(15,23,42,0.08); backdrop-filter: blur(8px); }
+    .top-dock { position: fixed; left: 50%; top: 10px; transform: translateX(-50%); width: min(calc(100% - 24px), 1100px); padding: 8px 10px; border-radius: 16px; z-index: 900; box-sizing: border-box; }
+    .top-nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+    .top-nav a { flex: 0 0 auto; white-space: nowrap; text-decoration: none; color: #334155; background: #e2e8f0; border: 1px solid #cbd5e1; padding: 7px 12px; border-radius: 999px; font-weight: 800; font-size: 13px; }
+    .top-nav a.active { background: #0f172a; color: #fff; border-color: #0f172a; }
+    .layout { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 16px; }
+    .panel { border-radius: 18px; padding: 16px; }
+    .section-title { font-weight: 900; margin: 0 0 12px; font-size: 1.05rem; }
+    .hint { font-size: 0.9rem; color: var(--muted); margin: -4px 0 12px; font-weight: 700; }
+    .row { display: grid; gap: 10px; }
+    label { display: block; font-size: 0.9rem; font-weight: 900; margin: 10px 0 6px; }
+    input, select, textarea { width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--line); font-size: 15px; background: #fff; color: #111827; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(20,184,166,0.12); }
+    .search-bar { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+    .btn { border: 0; border-radius: 12px; padding: 12px 16px; font-weight: 900; cursor: pointer; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-secondary { background: #e2e8f0; color: #334155; }
+    .btn-ghost { background: #ecfeff; color: #155e75; border: 1px solid #a5f3fc; }
+    .result-list { display: grid; gap: 10px; margin-top: 14px; max-height: 540px; overflow: auto; }
+    .result-card { border-radius: 16px; padding: 12px; display: grid; gap: 8px; }
+    .result-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+    .result-name { font-weight: 900; font-size: 1rem; }
+    .result-meta { color: var(--muted); font-size: 0.88rem; font-weight: 700; line-height: 1.5; }
+    .result-actions { display: flex; justify-content: flex-end; }
+    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: #ecfeff; color: #155e75; font-size: 12px; font-weight: 800; }
+    .summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+    .summary-item { background: #f8fafc; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+    .summary-item .k { font-size: 12px; color: var(--muted); font-weight: 800; }
+    .summary-item .v { font-size: 1rem; font-weight: 900; margin-top: 4px; word-break: break-all; }
+    .footer-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    .notice { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; font-size: 0.9rem; font-weight: 800; }
+    @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="top-dock"><div id="topNav" class="top-nav"></div></div>
+  <h1>資產位置移轉</h1>
+  <div class="sub">先查詢、再帶入、再確認。這一版先把查詢與表單流程接起來，後續再串正式寫回。</div>
+
+  <div class="layout">
+    <section class="panel">
+      <div class="section-title">1. 先查詢資產</div>
+      <div class="notice">只列出在庫資產，選定後會自動帶出資產編號、品名、原位置與可移轉量。</div>
+      <div class="search-bar">
+        <div>
+          <label for="transferKeyword">關鍵字</label>
+          <input id="transferKeyword" type="text" placeholder="輸入品名、編號、位置、保管人...">
+        </div>
+        <button class="btn btn-primary" id="searchBtn" type="button">查詢</button>
+      </div>
+      <div class="result-list" id="resultList"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">2. 轉移資料</div>
+      <div class="hint">送出前先確認來源與目的位置是否正確。</div>
+      <form id="transferForm" novalidate>
+        <label>資產編號</label>
+        <input id="assetId" name="assetId" readonly placeholder="先從左側查詢選擇">
+
+        <label>品名</label>
+        <input id="itemName" name="itemName" readonly>
+
+        <label>舊位置</label>
+        <input id="fromLocation" name="fromLocation" readonly>
+
+        <div class="summary-grid">
+          <div class="summary-item"><div class="k">可移轉量</div><div class="v" id="availableQty">-</div></div>
+          <div class="summary-item"><div class="k">單位</div><div class="v" id="assetUnit">-</div></div>
+        </div>
+
+        <label>新位置</label>
+        <input id="toLocation" name="toLocation" list="locationOptions" placeholder="請輸入或選擇新位置">
+        <datalist id="locationOptions"></datalist>
+
+        <label>新保管人 <span style="font-weight:400; color:#64748b;">(留空會沿用原保管人)</span></label>
+        <input id="toKeeper" name="toKeeper" placeholder="例如：張三 / 庫房">
+
+        <label>移轉數量</label>
+        <input id="transferQty" name="transferQty" type="number" min="1" step="1" value="1">
+
+        <label>移轉原因</label>
+        <textarea id="reason" name="reason" rows="3" placeholder="例如：位置調整、支援他區、保管人變更"></textarea>
+
+        <label>申請人 / 經手人</label>
+        <input id="operator" name="operator" placeholder="輸入姓名">
+
+        <label>一次性 Token / 密碼 <span style="font-weight:400; color:#64748b;">(選填；未在系統設定時可留空)</span></label>
+        <input id="token" name="token" placeholder="若系統管理員有設定授權碼才需填寫">
+
+        <label>Request ID</label>
+        <input id="requestId" name="requestId" readonly>
+
+        <div class="footer-actions">
+          <button class="btn btn-secondary" type="button" id="regenReqBtn">重新產生 Request ID</button>
+          <button class="btn btn-ghost" type="button" id="prepareBtn">先產生確認摘要</button>
+          <button class="btn btn-primary" type="button" id="submitBtn">確認移轉</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <script src="./gas-polyfill.js"></script>
+  <script>
+    const state = { selected: null, locations: [] };
+
+    function uuid() {
+      if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+      return 'req-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    }
+
+    function setRequestId() {
+      document.getElementById('requestId').value = uuid();
+    }
+
+    function renderLocations(list) {
+      const dl = document.getElementById('locationOptions');
+      dl.innerHTML = (list || []).map(x => `<option value="${String(x || '').replace(/"/g, '&quot;')}"></option>`).join('');
+    }
+
+    function fillSelection(item) {
+      state.selected = item;
+      document.getElementById('assetId').value = item.assetId || '';
+      document.getElementById('itemName').value = item.itemName || '';
+      document.getElementById('fromLocation').value = item.fromLocation || '';
+      document.getElementById('toKeeper').value = item.keeper || '';
+      document.getElementById('availableQty').textContent = String(item.availableQty || 0);
+      document.getElementById('assetUnit').textContent = item.unit || '件';
+      document.getElementById('transferQty').max = String(item.availableQty || 0);
+      if (!document.getElementById('transferQty').value || Number(document.getElementById('transferQty').value) > Number(item.availableQty || 1)) {
+        document.getElementById('transferQty').value = Math.max(1, Number(item.availableQty || 1));
+      }
+      document.getElementById('toLocation').focus();
+    }
+
+    function renderResults(items) {
+      const box = document.getElementById('resultList');
+      if (!items || !items.length) {
+        box.innerHTML = '<div class="result-card"><div class="result-meta">查無符合條件的在庫資產。</div></div>';
+        return;
+      }
+      box.innerHTML = items.map((item, idx) => `
+        <div class="result-card">
+          <div class="result-top">
+            <div>
+              <div class="result-name">${item.itemName || ''}</div>
+              <div class="result-meta">編號：${item.assetId || '-'}<br>位置：${item.fromLocation || '-'}<br>保管人：${item.keeper || '-'} / 數量：${item.availableQty || 0} ${item.unit || '件'}</div>
+            </div>
+            <span class="pill">#${idx + 1}</span>
+          </div>
+          <div class="result-actions"><button class="btn btn-primary" type="button" data-select="${idx}">帶入</button></div>
+        </div>
+      `).join('');
+
+      box.querySelectorAll('[data-select]').forEach(btn => {
+        btn.addEventListener('click', () => fillSelection(items[Number(btn.getAttribute('data-select'))]));
+      });
+    }
+
+    function searchTransfer(forceEmpty) {
+      const keyword = forceEmpty ? '' : document.getElementById('transferKeyword').value;
+      document.getElementById('resultList').innerHTML = '<div class="result-card"><div class="result-meta">搜尋中...</div></div>';
+      google.script.run
+        .withSuccessHandler(res => renderResults((res && res.items) || []))
+        .withFailureHandler(err => {
+          document.getElementById('resultList').innerHTML = '<div class="result-card"><div class="result-meta">查詢失敗：' + String(err || '') + '</div></div>';
+        })
+        .searchTransferCandidates(keyword, 20);
+    }
+
+    function prepareSummary() {
+      const validation = validateTransferForm();
+      if (!validation.success) {
+        alert(validation.message);
+        return null;
+      }
+      const summary = [
+        '資產編號：' + (document.getElementById('assetId').value || ''),
+        '品名：' + (document.getElementById('itemName').value || ''),
+        '舊位置：' + (document.getElementById('fromLocation').value || ''),
+        '新位置：' + (document.getElementById('toLocation').value || ''),
+        '新保管人：' + (document.getElementById('toKeeper').value || '(沿用原保管人)'),
+        '移轉數量：' + (document.getElementById('transferQty').value || ''),
+        '原因：' + (document.getElementById('reason').value || ''),
+        '經手人：' + (document.getElementById('operator').value || '')
+      ].join('\n');
+      alert('確認摘要：\n\n' + summary);
+      return summary;
+    }
+
+    function validateTransferForm() {
+      if (!state.selected) return { success: false, message: '請先從左側選擇資產。' };
+      const fromLocation = String(document.getElementById('fromLocation').value || '').trim();
+      const toLocation = String(document.getElementById('toLocation').value || '').trim();
+      const reason = String(document.getElementById('reason').value || '').trim();
+      const operator = String(document.getElementById('operator').value || '').trim();
+      const token = String(document.getElementById('token').value || '').trim();
+      const qty = Math.floor(Number(document.getElementById('transferQty').value));
+      const availableQty = Math.floor(Number(document.getElementById('availableQty').textContent) || 0);
+
+      if (!toLocation) return { success: false, message: '請輸入新位置。' };
+      if (toLocation === fromLocation) return { success: false, message: '新位置不可與舊位置相同。' };
+      if (!Number.isFinite(qty) || qty <= 0) return { success: false, message: '移轉數量必須大於 0。' };
+      if (qty > availableQty) return { success: false, message: '移轉數量不可超過可移轉量。' };
+      if (!reason) return { success: false, message: '請填寫移轉原因。' };
+      if (!operator) return { success: false, message: '請填寫申請人 / 經手人。' };
+      return { success: true };
+    }
+
+    function collectTransferPayload() {
+      return {
+        requestId: String(document.getElementById('requestId').value || '').trim(),
+        token: String(document.getElementById('token').value || '').trim(),
+        assetId: String(document.getElementById('assetId').value || '').trim(),
+        itemName: String(document.getElementById('itemName').value || '').trim(),
+        fromLocation: String(document.getElementById('fromLocation').value || '').trim(),
+        toLocation: String(document.getElementById('toLocation').value || '').trim(),
+        toKeeper: String(document.getElementById('toKeeper').value || '').trim(),
+        transferQty: Math.floor(Number(document.getElementById('transferQty').value)),
+        reason: String(document.getElementById('reason').value || '').trim(),
+        operator: String(document.getElementById('operator').value || '').trim()
+      };
+    }
+
+    function executeTransfer() {
+      const validation = validateTransferForm();
+      if (!validation.success) {
+        alert(validation.message);
+        return;
+      }
+
+      const payload = collectTransferPayload();
+      const summary = [
+        '資產編號：' + payload.assetId,
+        '品名：' + payload.itemName,
+        '舊位置：' + payload.fromLocation,
+        '新位置：' + payload.toLocation,
+        '新保管人：' + (payload.toKeeper || '(沿用原保管人)'),
+        '移轉數量：' + payload.transferQty,
+        '原因：' + payload.reason,
+        '經手人：' + payload.operator
+      ].join('\n');
+      if (!confirm('請確認以下移轉資料：\n\n' + summary)) return;
+
+      const btn = document.getElementById('submitBtn');
+      const oldText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '移轉中...';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          btn.disabled = false;
+          btn.textContent = oldText;
+          if (!res || !res.success) {
+            alert('移轉失敗：' + ((res && res.message) || '未知錯誤'));
+            return;
+          }
+          alert('移轉完成：' + (res.message || '') + '\n移轉單號：' + (res.transferNo || '-') + (res.idempotent ? '\n此請求先前已完成。' : ''));
+          state.selected = null;
+          document.getElementById('assetId').value = '';
+          document.getElementById('itemName').value = '';
+          document.getElementById('fromLocation').value = '';
+          document.getElementById('toLocation').value = '';
+          document.getElementById('toKeeper').value = '';
+          document.getElementById('reason').value = '';
+          document.getElementById('availableQty').textContent = '-';
+          document.getElementById('assetUnit').textContent = '-';
+          document.getElementById('transferQty').value = '1';
+          setRequestId();
+          searchTransfer(false);
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.textContent = oldText;
+          alert('移轉失敗：' + String(err || ''));
+        })
+        .executeAssetTransfer(payload);
+    }
+
+    window.addEventListener('load', () => {
+      setRequestId();
+      searchTransfer(true);
+
+      document.getElementById('topNav').innerHTML = `
+        <a href="index.html" target="_top">🏠 主選單</a>
+        <a href="inventory.html" target="_top">📊 總覽</a>
+        <a href="transfer.html" target="_top" class="active">↔️ 移轉</a>
+        <a href="stocktake-correction.html" target="_top">🧾 盤點校正</a>
+      `;
+
+      google.script.run.withSuccessHandler(list => {
+        state.locations = Array.isArray(list) ? list : [];
+        renderLocations(state.locations);
+      }).getTransferLocationList();
+
+      document.getElementById('searchBtn').addEventListener('click', () => searchTransfer(false));
+      document.getElementById('transferKeyword').addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          searchTransfer(false);
+        }
+      });
+      document.getElementById('regenReqBtn').addEventListener('click', setRequestId);
+      document.getElementById('prepareBtn').addEventListener('click', prepareSummary);
+      document.getElementById('submitBtn').addEventListener('click', executeTransfer);
+    });
+  </script>
+</body>
+</html>
