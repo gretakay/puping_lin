@@ -2,6 +2,7 @@
  * JSON API entrypoint for the Vercel frontend migration.
  * Called by the Vercel serverless proxy (api/gas.js), never directly by browsers.
  * See MIGRATION.md for the full architecture and call-site inventory.
+ * (touched to force a full clasp push after fixing .claspignore)
  */
 
 const API_WHITELIST = new Set([

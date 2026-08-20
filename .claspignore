@@ -1,0 +1,10 @@
+node_modules/**
+.git/**
+api/**
+gas-polyfill.js
+MIGRATION.md
+.gitignore
+.vercelignore
+.claspignore
+package.json
+package-lock.json
