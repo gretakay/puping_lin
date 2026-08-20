@@ -105,3 +105,29 @@ Apps Script doPost(e)  ← ApiRouter.js
 3. 實際點過 9 個頁面的每一個功能，不只看 network tab 回 200，要核對資料真的正確寫回 Sheet、有收到 LINE／Email 通知
 4. 跨平台檢查（same-origin fetch 理論上各平台一致，但建議至少過一次）：桌機 Chrome/Edge/Safari、手機 Chrome(Android)/Safari(iOS)、LINE App 內建瀏覽器
 5. 部署完成、有測試網址後，可以請我用 `curl` 幫忙驗證 `/api/gas` 的白名單阻擋、密鑰驗證等後端行為是否符合預期
+
+## Step 3：git repo + Vercel 部署
+
+### 已完成
+
+- 本機 `git init`，已建立第一個 commit（`4ee9bac`），內容是這次搬遷的全部改動
+- 新增 `.gitignore`（排除 `node_modules/`、`.vercel/`、`.env*`）
+- 新增 `.vercelignore`：排除 Apps Script 後端專用檔案（9 支 `.js` 後端邏輯、`appsscript.json`、`.clasp.json`、`MIGRATION.md`），避免這些檔案被 Vercel 當成公開靜態檔案發布出去。後端還是完全走 `clasp push` 部署，跟 Vercel 無關。
+
+### 選定方式：GitHub + Vercel 自動部署
+
+決定用「push 到 GitHub → Vercel 連接該 repo 自動部署」的方式，之後每次 `git push` 都會自動重新部署，PR 也會自動產生預覽網址。
+
+### 接下來需要使用者操作的部分（沒有 GitHub/Vercel 帳號權限，無法代勞）
+
+1. 到 GitHub 建立一個新的**空**repository（不要勾選自動產生 README/`.gitignore`/LICENSE，因為本機已經有內容了）
+2. 把新 repo 的網址（例如 `https://github.com/<your-account>/<repo-name>.git`）告訴我，或自行執行：
+   ```
+   git remote add origin https://github.com/<your-account>/<repo-name>.git
+   git push -u origin master
+   ```
+3. 到 [vercel.com](https://vercel.com) 用同一組 GitHub 帳號登入，選「Add New Project」→ 選剛剛那個 repo → Framework Preset 選「Other」（純靜態 + `/api` serverless function，不需要建置指令）
+4. 在 Vercel 專案的 Environment Variables 設定：
+   - `GAS_EXEC_URL`：Apps Script Web App 部署後的 exec 網址
+   - `API_SECRET`：跟 Apps Script Script Properties 裡同一組密鑰
+5. Deploy，拿到 Vercel 給的網址後即可實際測試（見上方「驗證清單」）
