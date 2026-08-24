@@ -49,14 +49,19 @@ function autoArchiveMaintenance() {
 
       data.forEach(row => {
         const transDate = new Date(row[0]); // 第一欄(A)：日期
-        const status = String(row[3]);      // 第四欄(D)：狀態 (借出/歸還)
-        
+        const txType = String(row[1] || '').trim(); // 第二欄(B)：交易類型
+
         /**
          * 搬移條件：
          * 1. 紀錄日期超過 3 個月
-         * 2. 且 狀態不是「借出中」(確保尚未歸還的資產紀錄留在主表)
+         * 2. 且交易類型不是「借出」
+         *
+         * 注意：借出成功時只會在這張表新增一列「借出」紀錄，之後歸還時是另外
+         * 新增一列「歸還」紀錄，並不會回頭更新原本那列「借出」的狀態欄位。
+         * 所以無法只看這一列本身判斷是否已歸還，這裡改成整批保留所有「借出」
+         * 類型的紀錄，確保尚未歸還（或已歸還但想留底核對）的借出紀錄都不會被搬走。
          */
-        if (transDate < cutoffDate && status !== "借出中") {
+        if (transDate < cutoffDate && txType !== '借出') {
           toArchive.push(row);
         } else {
           toKeep.push(row);
@@ -82,8 +87,8 @@ function autoArchiveMaintenance() {
 
       data.forEach(row => {
         const entryDate = new Date(row[0]);  // 第一欄(A)：入庫時間戳記
-        const quantity = Number(row[2]);     // 第三欄(C)：剩餘數量
-        const expiryDate = new Date(row[3]); // 第四欄(D)：保存期限
+        const quantity = Number(row[5]);     // 第六欄(F)：StandardQuantity 剩餘數量
+        const expiryDate = new Date(row[8]); // 第九欄(I)：ExpiryDate 保存期限
         
         /**
          * 搬移條件：

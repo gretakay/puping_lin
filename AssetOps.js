@@ -902,7 +902,6 @@ function withdrawItem(p) {
 							if (rowIds.length === 1) {
 								sheet.getRange(row, 7).setValue('借出中');
 								sheet.getRange(row, 9).setValue(itemObj.receiver || p.receiver);
-								try { sheet.getRange(row, 14).setValue(0); } catch (e) {}
 							} else {
 								const stay = rowIds.filter(x => x !== id);
 								sheet.getRange(row, 2).setValue(stay.join(', '));
@@ -1128,13 +1127,14 @@ function returnAsset(p) {
 		let borrowedScanCache = null;
 		let mergeSearchPrepared = false;
 
-		function toMergeKey(status, itemName, itemSpec, itemColor, displayLoc) {
+		function toMergeKey(status, itemName, itemSpec, itemColor, displayLoc, itemKeeper) {
 			return [
 				String(status || '').trim(),
 				String(itemName || ''),
 				String(itemSpec || ''),
 				String(itemColor || ''),
-				String(displayLoc || '').trim()
+				String(displayLoc || '').trim(),
+				String(itemKeeper || '').trim()
 			].join('||');
 		}
 
@@ -1149,7 +1149,8 @@ function returnAsset(p) {
 					const rrStatus = String(rr[6] || '').trim();
 					if (!rrStatus) continue;
 					const rrLoc = String(rr[12] || locX).trim();
-					const idxKey = toMergeKey(rrStatus, rr[2], rr[5], rr[3], rrLoc);
+					const rrKeeper = String(rr[7] || '').trim();
+					const idxKey = toMergeKey(rrStatus, rr[2], rr[5], rr[3], rrLoc, rrKeeper);
 					if (!mergeSearchIndex[idxKey]) {
 						mergeSearchIndex[idxKey] = { sheet: locX, row: j + 1 };
 					}
@@ -1199,10 +1200,11 @@ function returnAsset(p) {
 			}
 		}
 
-		function findMergeTargetRowInner(targetStatus, itemName, itemSpec, itemColor, displayLoc) {
+		function findMergeTargetRowInner(targetStatus, itemName, itemSpec, itemColor, displayLoc, itemKeeper) {
 			const normalizedStatus = String(targetStatus || '在庫').trim() || '在庫';
 			const normalizedLoc = String(displayLoc || '').trim();
-			const cacheKey = toMergeKey(normalizedStatus, itemName, itemSpec, itemColor, normalizedLoc);
+			const normalizedKeeper = String(itemKeeper || '').trim();
+			const cacheKey = toMergeKey(normalizedStatus, itemName, itemSpec, itemColor, normalizedLoc, normalizedKeeper);
 
 			const validateCached = (cached) => {
 				if (!cached || !cached.sheet || !cached.row) return null;
@@ -1210,11 +1212,13 @@ function returnAsset(p) {
 					const row = getRowValuesBySheetRow(cached.sheet, cached.row);
 					const rowStatus = String(row[6] || '').trim();
 					const rowLoc = String(row[12] || cached.sheet).trim();
+					const rowKeeper = String(row[7] || '').trim();
 					if (rowStatus !== normalizedStatus) return null;
 					if (String(row[2] || '') !== String(itemName || '')) return null;
 					if (String(row[5] || '') !== String(itemSpec || '')) return null;
 					if (String(row[3] || '') !== String(itemColor || '')) return null;
 					if (rowLoc !== normalizedLoc) return null;
+					if (normalizedKeeper && rowKeeper !== normalizedKeeper) return null;
 					return { sheet: cached.sheet, row: cached.row, values: row };
 				} catch (e) {
 					return null;
@@ -1342,7 +1346,7 @@ function returnAsset(p) {
 					let merged = false;
 					if (canMergeBackToStock) {
 						const mergeStart = new Date().getTime();
-						const mergeTarget = findMergeTargetRowInner('在庫', rowValues[2], rowValues[5], rowValues[3], displayLoc);
+						const mergeTarget = findMergeTargetRowInner('在庫', rowValues[2], rowValues[5], rowValues[3], displayLoc, rowValues[7]);
 						timing.mergeLookupMs += (new Date().getTime() - mergeStart);
 						if (mergeTarget) {
 							const rr = mergeTarget.values;
@@ -1373,7 +1377,7 @@ function returnAsset(p) {
 					let mergedReturnSheetKey = null;
 					if (canMergeBackToStock) {
 						const mergeStart = new Date().getTime();
-						const mergeTarget2 = findMergeTargetRowInner('在庫', rowValues[2], rowValues[5], rowValues[3], displayLoc2);
+						const mergeTarget2 = findMergeTargetRowInner('在庫', rowValues[2], rowValues[5], rowValues[3], displayLoc2, rowValues[7]);
 						timing.mergeLookupMs += (new Date().getTime() - mergeStart);
 						if (mergeTarget2) {
 							const rr = mergeTarget2.values;
@@ -1397,7 +1401,7 @@ function returnAsset(p) {
 						aSheet.appendRow(nr);
 						const newRowNum = aSheet.getLastRow();
 						upsertIndexEntries(assetIndex, [targetId], loc, newRowNum);
-						const newMergeKey = toMergeKey(nr[6], nr[2], nr[5], nr[3], nr[12] || loc);
+						const newMergeKey = toMergeKey(nr[6], nr[2], nr[5], nr[3], nr[12] || loc, nr[7]);
 						if (!mergeSearchIndex[newMergeKey]) mergeSearchIndex[newMergeKey] = { sheet: loc, row: newRowNum };
 					}
 				}

@@ -928,7 +928,7 @@
 
         // 編號範圍
         let idsArr = Array.isArray(a.ids) ? a.ids.filter(Boolean).map(x=>String(x)) : [];
-        idsArr = idsArr.sort();
+        idsArr = idsArr.sort((x, y) => x.localeCompare(y, undefined, { numeric: true, sensitivity: 'base' }));
         let rangeDisplay = idsArr.length > 0 ? idsArr[0] : '';
         if (idsArr.length > 1) {
           const first = idsArr[0];

@@ -204,9 +204,14 @@ function executeAssetTransfer(payload) {
 			return { success: false, code: 'E_QTY_EXCEED_AVAILABLE', message: failMessage };
 		}
 
-		const movedIds = sourceIds.slice(0, transferQty);
-		const remainingIds = sourceIds.slice(transferQty);
+		// 一個編號代表整批數量的列（例如超商模式建檔），編號跟件數不是一對一，
+		// 部分數量移轉時不能用陣列切片分編號，兩邊都要保留同一個編號，只有全部移轉光才清空來源編號。
+		const isBatchStyleRow = sourceIds.length === 1 && availableQty > 1;
 		const nextSourceQty = availableQty - transferQty;
+		const movedIds = isBatchStyleRow ? sourceIds.slice() : sourceIds.slice(0, transferQty);
+		const remainingIds = isBatchStyleRow
+			? (nextSourceQty > 0 ? sourceIds.slice() : [])
+			: sourceIds.slice(transferQty);
 		const stamp = Utilities.formatDate(new Date(), 'GMT+8', 'yyyy-MM-dd HH:mm:ss');
 		const toDisplayLocation = toLocation;
 		const toSheetKey = mapLocationKeyForWrite(toDisplayLocation);

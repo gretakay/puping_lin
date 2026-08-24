@@ -255,6 +255,8 @@
     let allBorrowedAssets = [];
     let filteredGroups = []; // 🚀 存放過濾後的分組資料
     let detailsCache = {}; // 延遲渲染時的群組內容快取
+    // 已勾選項目（key=資產編號），獨立於畫面 DOM 存在，換頁/搜尋/收合都不會遺失
+    let selectedItemsMap = {};
     let ROOM_DATA = {}; 
     let FLOOR_MAPS = {}; 
     let currentPageIndex = 1;
@@ -596,20 +598,43 @@ function renderPaginatedList() {
       if (!container) return;
       if (container.getAttribute('data-loaded') === 'true') return;
       const items = detailsCache[groupId] || [];
-      container.innerHTML = items.map(item => `
+      container.innerHTML = items.map(item => {
+        const saved = selectedItemsMap[String(item.id)];
+        const isChecked = !!saved;
+        const savedQty = isChecked ? (Number(saved.qty) || 1) : 1;
+        return `
         <div class="detail-row">
-          <input type="checkbox" name="assetIds" value="${item.id}" data-item-name="${escapeHtml(item.name)}" data-count="${Number(item.count)||1}" data-qty-input="qty-${groupId}-${item.id}" class="item-cb sub-cb" data-parent="cb-${groupId}" onchange="onItemChecked(this);updateCount()" style="width:22px; height:22px; margin-right:15px;">
+          <input type="checkbox" name="assetIds" value="${item.id}" data-item-name="${escapeHtml(item.name)}" data-count="${Number(item.count)||1}" data-qty-input="qty-${groupId}-${item.id}" class="item-cb sub-cb" data-parent="cb-${groupId}" ${isChecked ? 'checked' : ''} onchange="onItemChecked(this);updateCount()" style="width:22px; height:22px; margin-right:15px;">
           <div class="detail-col-id">編號：${item.id}${Number(item.count) && Number(item.count) > 1 ? ' <small style="color:#64748b;">(批次共 '+Number(item.count)+' 本)</small>' : ''}</div>
           <div class="detail-col-loc">
             <span class="loc-tag" data-map-url="${encodeURIComponent(String(item.mapUrl || ''))}" data-location="${encodeURIComponent(String(item.location || ''))}" onclick="showMap(decodeURIComponent(this.dataset.mapUrl || ''), decodeURIComponent(this.dataset.location || ''))">${escapeHtml(item.location)} (圖解)</span>
           </div>
-          ${Number(item.count) && Number(item.count) > 1 ? `<div style="margin-left:auto; display:flex; gap:8px; align-items:center;"><label style="font-weight:900; color:#475569;">歸還數</label><input id="qty-${groupId}-${item.id}" type="number" min="1" max="${Number(item.count)}" value="1" style="width:80px; padding:6px; border:1px solid #e2e8f0; border-radius:8px; font-weight:900;" onchange="onQtyChange('${groupId}','${item.id}')"></div>` : ''}
+          ${Number(item.count) && Number(item.count) > 1 ? `<div style="margin-left:auto; display:flex; gap:8px; align-items:center;"><label style="font-weight:900; color:#475569;">歸還數</label><input id="qty-${groupId}-${item.id}" type="number" min="1" max="${Number(item.count)}" value="${savedQty}" style="width:80px; padding:6px; border:1px solid #e2e8f0; border-radius:8px; font-weight:900;" onchange="onQtyChange('${groupId}','${item.id}')"></div>` : ''}
         </div>
-      `).join('');
+      `;
+      }).join('');
       container.setAttribute('data-loaded','true');
     }
 
     function toggleDetails(id) { const el = document.getElementById(id); if (!el) return; if (el.style.display === 'block') { el.style.display = 'none'; } else { renderGroupDetails(id); el.style.display = 'block'; } }
+    // 把某個子項目的目前勾選/數量狀態同步進 selectedItemsMap（跨頁/跨群組持久保存）
+    function syncSelectedState(cb) {
+      if (!cb) return;
+      const id = String(cb.value);
+      if (cb.checked) {
+        const qtyInputId = cb.getAttribute('data-qty-input');
+        const fullCount = Number(cb.getAttribute('data-count')) || 1;
+        let qty = fullCount;
+        if (qtyInputId) {
+          const inp = document.getElementById(qtyInputId);
+          if (inp) qty = Number(inp.value) || fullCount;
+        }
+        selectedItemsMap[id] = { qty: qty, name: cb.getAttribute('data-item-name') || id };
+      } else {
+        delete selectedItemsMap[id];
+      }
+    }
+
     function syncGroup(cb, groupId) {
       const groupEl = document.getElementById(groupId);
       if (!groupEl) return;
@@ -632,35 +657,36 @@ function renderPaginatedList() {
             }
           }
         }
+        syncSelectedState(s);
       });
       updateCount();
     }
     function updateCount() {
-      // Sum up selected quantities (supports linked qty inputs for batch items)
-      const checked = document.querySelectorAll('.sub-cb:checked');
+      // 已選數量一律以 selectedItemsMap 為準，這樣換頁/收合群組都不會漏算
       let sum = 0;
-      checked.forEach(cb => {
-        const qtyInputId = cb.getAttribute('data-qty-input');
-        let qty = Number(cb.getAttribute('data-count')) || 1;
-        if (qtyInputId) {
-          const inp = document.getElementById(qtyInputId);
-          if (inp) qty = Number(inp.value) || qty;
-        }
-        sum += qty;
+      Object.keys(selectedItemsMap).forEach(id => {
+        sum += Number(selectedItemsMap[id].qty) || 1;
       });
       document.getElementById('selectedCount').textContent = sum;
       document.querySelectorAll('.group-header').forEach(header => {
         const cb = header.querySelector('.sub-parent');
-        if(!cb) return;
-        const checkedSubs = document.querySelectorAll(`[data-parent="${cb.id}"]:checked`);
-        header.classList.toggle('selected', checkedSubs.length > 0);
+        if (!cb) return;
+        const groupId = cb.id.replace(/^cb-/, '');
+        const items = detailsCache[groupId] || [];
+        const anySelected = items.some(it => Object.prototype.hasOwnProperty.call(selectedItemsMap, String(it.id)));
+        header.classList.toggle('selected', anySelected);
+        // 群組主勾選框：只有整組都在 selectedItemsMap 裡才顯示為勾選，避免換頁/收合後看起來跟實際狀態不一致
+        cb.checked = items.length > 0 && items.every(it => Object.prototype.hasOwnProperty.call(selectedItemsMap, String(it.id)));
       });
     }
 
     function onQtyChange(groupId, itemId) {
       // If checkbox is checked, update total display immediately
       const cb = document.querySelector(`.item-cb[value="${itemId}"]`);
-      if (cb && cb.checked) updateCount();
+      if (cb && cb.checked) {
+        syncSelectedState(cb);
+        updateCount();
+      }
     }
 
     function onItemChecked(cb) {
@@ -672,9 +698,10 @@ function renderPaginatedList() {
         const inp = document.getElementById(qtyInputId);
         if (inp) inp.value = fullCount;
       }
+      syncSelectedState(cb);
     }
 
-    function toggleAllFiltered(state) { 
+    function toggleAllFiltered(state) {
       // 先確保目前頁面的群組明細已渲染，避免初次全選時沒有 .item-cb 可勾選
       document.querySelectorAll('.detail-list').forEach(el => {
         if (el.getAttribute('data-loaded') !== 'true') {
@@ -704,9 +731,17 @@ function renderPaginatedList() {
         });
       }
 
+      // 這裡「全選/全不選」只作用在目前頁面渲染出來的項目（跟原本行為一致），同步進持久狀態
+      document.querySelectorAll('.item-cb').forEach(cb => syncSelectedState(cb));
+
       updateCount();
     }
-    function toggleAll(state) { document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = state); updateCount(); }
+    function toggleAll(state) {
+      document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = state);
+      // 跟「全選」一樣只作用在目前頁面渲染出來的項目，同步進持久狀態，避免「清除」後其實還留著沒送出
+      document.querySelectorAll('.item-cb').forEach(cb => syncSelectedState(cb));
+      updateCount();
+    }
 
     function safeRedirect(pageName) { window.top.location.href = pageName + '.html'; }
 
@@ -722,23 +757,20 @@ function renderPaginatedList() {
     }
 
     function collectSubmitCheck() {
-      const checked = document.querySelectorAll('.sub-cb:checked');
+      // 一律以 selectedItemsMap 為準：涵蓋所有頁面、所有已展開/未展開群組的勾選結果
+      const selectedIds = Object.keys(selectedItemsMap);
       const statusEl = document.getElementById('targetStatus');
       const handler = String(document.getElementById('handlerInput').value || '').trim();
       const statusText = statusEl && statusEl.options && statusEl.selectedIndex >= 0
         ? String(statusEl.options[statusEl.selectedIndex].text || '').trim()
         : '';
 
-      const hasItems = checked.length > 0;
+      const hasItems = selectedIds.length > 0;
       const hasHandler = !!handler;
-      const itemSummary = Array.from(checked).map(cb => {
-        const qtyInputId = cb.getAttribute('data-qty-input');
-        let qty = Number(cb.getAttribute('data-count')) || 1;
-        if (qtyInputId) {
-          const inp = document.getElementById(qtyInputId);
-          if (inp) qty = Number(inp.value) || qty;
-        }
-        const name = String(cb.getAttribute('data-item-name') || cb.value || '').trim();
+      const itemSummary = selectedIds.map(id => {
+        const it = selectedItemsMap[id];
+        const name = String((it && it.name) || id).trim();
+        const qty = Number(it && it.qty) || 1;
         return `${name} x ${qty}`;
       }).join('；');
 
@@ -789,19 +821,14 @@ function renderPaginatedList() {
         }
         return;
       }
-      const checked = document.querySelectorAll('.sub-cb:checked');
       closeConfirmModal();
       const btn = document.getElementById('submit-btn');
       btn.disabled = true; btn.innerHTML = '<div class="loader"></div> 正在同步雲端...';
-      const assetRequests = Array.from(checked).map(cb => {
-        const qtyInputId = cb.getAttribute('data-qty-input');
-        let qty = Number(cb.getAttribute('data-count')) || 1;
-        if (qtyInputId) {
-          const inp = document.getElementById(qtyInputId);
-          if (inp) qty = Number(inp.value) || qty;
-        }
-        return { id: cb.value, qty: qty };
-      });
+      // 一律以 selectedItemsMap 送出：涵蓋所有頁面已勾選的項目，不受目前畫面上渲染了哪一頁影響
+      const assetRequests = Object.keys(selectedItemsMap).map(id => ({
+        id: id,
+        qty: Number(selectedItemsMap[id].qty) || 1
+      }));
       const data = { 
         assetIds: assetRequests,
         handler: document.getElementById('handlerInput').value, 
@@ -820,6 +847,7 @@ function renderPaginatedList() {
 
             // 自動重整歸還清單，免手動點「重整」
             setTimeout(() => {
+              selectedItemsMap = {};
               document.getElementById('returnSearch').value = '';
               document.getElementById('noteInput').value = '';
               document.getElementById('selectedCount').textContent = '0';

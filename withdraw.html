@@ -931,7 +931,11 @@
         }
         // 若來源列有 count > 1，視為可以用超商/批次模式處理（以數量扣減第14欄），
         // 避免因 foundItem.ids 長度不同而錯過批次模式判定。
-        const isBatchId = (Number(foundItem.count) || 0) > 1;
+        // 🔧 這裡刻意不用 foundItem.count：它可能是扣掉購物車裡已加入數量後的「剩餘量」
+        // （見 renderFinalItems 的 remainingCount），同一批次分兩次加入、加到只剩 1 件時
+        // 會被誤判成非批次。改用 assets 原始資料裡的總量來判斷是否為批次列。
+        const rawAssetItem = assets.find(x => String(x.id || '') === String(firstId)) || foundItem;
+        const isBatchId = (Number(rawAssetItem.count) || 0) > 1;
 
         cart.push({
           itemName: optName,

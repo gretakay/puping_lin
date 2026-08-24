@@ -380,8 +380,7 @@ function getAvailableAssetsFull(forceRefresh) {
 						};
 					}
 
-					if (status === '借出中') groupMap[key].count += (initQty > 0 ? initQty : 0);
-					else groupMap[key].count += count;
+					groupMap[key].count += count;
 					if (!groupMap[key].note) {
 						groupMap[key].note = String(r[9] || '').trim();
 					}
