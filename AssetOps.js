@@ -570,7 +570,12 @@ function withdrawItem(p) {
 
 		for (let itemObj of itemsToProcess) {
 			const targetName = String(itemObj.itemName).trim();
-			const requestQty = Math.abs(Number(itemObj.quantity || 1));
+			const rawQty = itemObj.quantity;
+			const qtyOmitted = (rawQty === undefined || rawQty === null || rawQty === '');
+			const requestQty = qtyOmitted ? 1 : Math.abs(Number(rawQty));
+			// 數量有明確填寫但無效（非數字、0、負數）時直接跳過這個項目，不要悄悄當成 1 件處理；
+			// 沒填數量（qtyOmitted）才維持預設 1 件的既有行為。
+			if (!qtyOmitted && (!Number.isFinite(requestQty) || requestQty <= 0)) continue;
 			const isAssetMode = (itemObj.type === 'asset' || (itemObj.assetIds && itemObj.assetIds.length > 0));
 
 			if (isAssetMode) {
@@ -584,6 +589,103 @@ function withdrawItem(p) {
 				if (assetAction === 'consume') {
 					let leftToConsume = requestQty;
 					const touchedRows = {};
+
+					// 處理單一候選列的領用邏輯，抽成共用函式讓「索引直查」與「品名回掃 fallback」共用同一份邏輯，
+					// 避免像 MIGRATION.md 記錄過的「同一段邏輯複製兩份、只修一份」問題。
+					function tryConsumeRow(sheetKey, row, rowValues, preferredId) {
+						if (leftToConsume <= 0) return false;
+						const rowKey = sheetKey + '::' + row;
+						if (touchedRows[rowKey]) return false;
+
+						const status = String(rowValues[6] || '').trim();
+						if (status !== '在庫' && status !== '') return false;
+						const outRule = String(rowValues[14] || '僅借用').trim() || '僅借用';
+						if (outRule === '僅借用') return false;
+
+						const rowIds = String(rowValues[1] || '').split(/[,，\s]+/).map(s => s.trim()).filter(Boolean);
+						if (!rowIds.length) return false;
+
+						let id;
+						if (preferredId) {
+							if (!rowIds.includes(preferredId)) return false;
+							id = preferredId;
+						} else {
+							id = rowIds[0];
+						}
+
+						const origInit = Number(rowValues[13]) || rowIds.length;
+						if (origInit <= 0) return false;
+
+						const takeQty = Math.min(leftToConsume, origInit);
+						if (takeQty <= 0) return false;
+
+						const sheet = getAssetLocationSheet(sheetKey);
+						const isBatchRow = rowIds.length <= 1 && origInit > 1;
+						const consumeIds = isBatchRow ? [id] : rowIds.slice(0, takeQty);
+						const stayIds = isBatchRow ? rowIds : rowIds.slice(takeQty);
+						const newInit = Math.max(0, origInit - takeQty);
+
+						if (newInit <= 0) {
+							const removedIds = isBatchRow ? [id] : consumeIds.slice();
+							deleteIndexEntries(assetIndex, removedIds);
+							consumedZeroDeleteLogs.push({
+								name: rowValues[2],
+								ids: removedIds,
+								qty: takeQty,
+								receiver: itemObj.receiver || p.receiver,
+								handler: itemObj.handler || p.handler,
+								note: itemObj.note || p.note,
+								location: String(rowValues[12] || '').trim() || sheetKey,
+								sourceSheetKey: sheetKey,
+								sourceRowNum: Number(row) || 0
+							});
+							sheet.deleteRow(row);
+							assetRowsDeleted = true;
+							indexRebuilt = false;
+							delete idCellCache[rowKey];
+						} else {
+							try { sheet.getRange(row, 14).setValue(newInit); } catch (e) {}
+							if (!isBatchRow) {
+								sheet.getRange(row, 2).setValue(stayIds.join(', '));
+								upsertIndexEntries(assetIndex, stayIds, sheetKey, row);
+							}
+
+							const newRow = [...rowValues];
+							newRow[1] = consumeIds.join(', ');
+							newRow[6] = '已領用';
+							newRow[8] = itemObj.receiver || p.receiver;
+							newRow[13] = takeQty;
+							sheet.appendRow(newRow);
+							const newRowNum = sheet.getLastRow();
+							upsertIndexEntries(assetIndex, consumeIds, sheetKey, newRowNum);
+						}
+
+						currentItemProcessed.push({
+							id: consumeIds[0] || id,
+							qty: takeQty,
+							name: rowValues[2],
+							spec: rowValues[5],
+							color: rowValues[3],
+							unit: rowValues[10],
+							keeper: rowValues[7],
+							location: String(rowValues[12] || '').trim() || sheetKey
+						});
+
+						allProcessedAssetsConsume.push({
+							id: consumeIds[0] || id,
+							qty: takeQty,
+							name: rowValues[2],
+							spec: rowValues[5],
+							color: rowValues[3],
+							unit: rowValues[10],
+							keeper: rowValues[7],
+							location: String(rowValues[12] || '').trim() || sheetKey
+						});
+
+						leftToConsume -= takeQty;
+						touchedRows[rowKey] = true;
+						return true;
+					}
 
 					for (let i = 0; i < targetIds.length; i++) {
 						if (leftToConsume <= 0) break;
@@ -617,84 +719,26 @@ function withdrawItem(p) {
 						const sheet = getAssetLocationSheet(locInfo.sheet);
 						const row = locInfo.row;
 						const rowValues = sheet.getRange(row, 1, 1, 15).getValues()[0];
-						const status = String(rowValues[6] || '').trim();
-						if (status !== '在庫' && status !== '') continue;
-						const outRule = String(rowValues[14] || '僅借用').trim() || '僅借用';
-						if (outRule === '僅借用') continue;
+						tryConsumeRow(locInfo.sheet, row, rowValues, id);
+					}
 
-						const rowIds = String(rowValues[1] || '').split(/[,，\s]+/).map(s => s.trim()).filter(Boolean);
-						if (!rowIds.includes(id)) continue;
-
-						const origInit = Number(rowValues[13]) || rowIds.length;
-						if (origInit <= 0) continue;
-
-						const takeQty = Math.min(leftToConsume, origInit);
-						if (takeQty <= 0) continue;
-
-						const isBatchRow = rowIds.length <= 1 && origInit > 1;
-						const consumeIds = isBatchRow ? [id] : rowIds.slice(0, takeQty);
-						const stayIds = isBatchRow ? rowIds : rowIds.slice(takeQty);
-						const newInit = Math.max(0, origInit - takeQty);
-
-						if (newInit <= 0) {
-							const removedIds = isBatchRow ? [id] : consumeIds.slice();
-							deleteIndexEntries(assetIndex, removedIds);
-							consumedZeroDeleteLogs.push({
-								name: rowValues[2],
-								ids: removedIds,
-								qty: takeQty,
-								receiver: itemObj.receiver || p.receiver,
-								handler: itemObj.handler || p.handler,
-								note: itemObj.note || p.note,
-								location: String(rowValues[12] || '').trim() || locInfo.sheet,
-								sourceSheetKey: String(locInfo.sheet || '').trim(),
-								sourceRowNum: Number(row) || 0
-							});
-							sheet.deleteRow(row);
-							assetRowsDeleted = true;
-							indexRebuilt = false;
-							delete idCellCache[rowKey];
-						} else {
-							try { sheet.getRange(row, 14).setValue(newInit); } catch (e) {}
-							if (!isBatchRow) {
-								sheet.getRange(row, 2).setValue(stayIds.join(', '));
-								upsertIndexEntries(assetIndex, stayIds, locInfo.sheet, row);
+					// 保險機制：若送進來的 assetIds 與索引不一致、或索引指向的列庫存不夠，改用品名/位置回掃可領用列，
+					// 避免整批領用被靜默漏領（跟借出分支第 780 行附近的 fallback 是同一種保險機制）。
+					if (leftToConsume > 0) {
+						const fallbackLocations = getLocationKeysCached();
+						const targetLocation = String(itemObj.location || '').trim();
+						for (let li = 0; li < fallbackLocations.length && leftToConsume > 0; li++) {
+							const sheetKey = fallbackLocations[li];
+							const sheet = getAssetLocationSheet(sheetKey);
+							const rows = sheet.getDataRange().getValues();
+							for (let r = rows.length - 1; r >= 1 && leftToConsume > 0; r--) {
+								const rowValues = rows[r];
+								const rowDisplayLoc = String(rowValues[12] || '').trim() || sheetKey;
+								if (targetLocation && rowDisplayLoc !== targetLocation) continue;
+								if (String(rowValues[2] || '').trim() !== targetName) continue;
+								tryConsumeRow(sheetKey, r + 1, rowValues, null);
 							}
-
-							const newRow = [...rowValues];
-							newRow[1] = consumeIds.join(', ');
-							newRow[6] = '已領用';
-							newRow[8] = itemObj.receiver || p.receiver;
-							newRow[13] = takeQty;
-							sheet.appendRow(newRow);
-							const newRowNum = sheet.getLastRow();
-							upsertIndexEntries(assetIndex, consumeIds, locInfo.sheet, newRowNum);
 						}
-
-						currentItemProcessed.push({
-							id: consumeIds[0] || id,
-							qty: takeQty,
-							name: rowValues[2],
-							spec: rowValues[5],
-							color: rowValues[3],
-							unit: rowValues[10],
-							keeper: rowValues[7],
-							location: String(rowValues[12] || '').trim() || locInfo.sheet
-						});
-
-						allProcessedAssetsConsume.push({
-							id: consumeIds[0] || id,
-							qty: takeQty,
-							name: rowValues[2],
-							spec: rowValues[5],
-							color: rowValues[3],
-							unit: rowValues[10],
-							keeper: rowValues[7],
-							location: String(rowValues[12] || '').trim() || locInfo.sheet
-						});
-
-						leftToConsume -= takeQty;
-						touchedRows[rowKey] = true;
 					}
 
 					if (currentItemProcessed.length > 0) {
@@ -769,12 +813,26 @@ function withdrawItem(p) {
 								pendingByRow[key].ids = [id];
 								leftToBorrow -= pendingByRow[key].borrowCount;
 								break;
+							} else {
+								// 這一列可借量只剩 1（或更少），無法一次滿足 >1 的需求，跟單件需求一樣只算這一列貢獻 1 件，
+								// 不要 break，讓迴圈繼續找別列補足其餘數量。
+								pendingByRow[key].ids.push(id);
+								leftToBorrow--;
 							}
 						} else {
 							pendingByRow[key].ids.push(id);
 							leftToBorrow--;
 						}
 					}
+
+					// 防呆：清掉沒有實際湊到任何數量的空殼項目，避免下面寫入迴圈把它當成合法項目、
+					// 在試算表留下一列編號空白、狀態借出中、數量 0 的垃圾資料。
+					Object.keys(pendingByRow).forEach(k => {
+						const entry = pendingByRow[k];
+						const hasIds = entry && Array.isArray(entry.ids) && entry.ids.length > 0;
+						const hasBorrowCount = entry && Number(entry.borrowCount) > 0;
+						if (!hasIds && !hasBorrowCount) delete pendingByRow[k];
+					});
 
 					// 保險機制：若送進來的 assetIds 與索引不一致，改用品名/位置回掃可借列，避免整筆失敗
 					if (Object.keys(pendingByRow).length === 0 && leftToBorrow > 0) {
@@ -1111,9 +1169,18 @@ function returnAsset(p) {
 		lock.waitLock(30000);
 		const tSheet = getSheet(TRANS_ASSETS_NAME);
 		const rawReq = Array.isArray(p.assetIds) ? p.assetIds : String(p.assetIds).split(/[,，\s]+/).map(s => s.trim()).filter(s => s !== '');
+		// qty 沒填（undefined/null/空字串）才預設 1 件；明確填了 0 或負數則保留原值，交給下面的 filter 濾掉，
+		// 不要用 `|| 1` 悄悄把顯式的 0 蓋成 1。
 		const requests = rawReq
-			.map(r => (typeof r === 'object' && r !== null) ? { id: String(r.id || '').trim(), qty: Number(r.qty) || 1 } : { id: String(r || '').trim(), qty: 1 })
-			.filter(r => r.id !== '' && Number(r.qty) > 0);
+			.map(r => {
+				if (typeof r === 'object' && r !== null) {
+					const rawQty = r.qty;
+					const qtyOmitted = (rawQty === undefined || rawQty === null || rawQty === '');
+					return { id: String(r.id || '').trim(), qty: qtyOmitted ? 1 : Number(rawQty) };
+				}
+				return { id: String(r || '').trim(), qty: 1 };
+			})
+			.filter(r => r.id !== '' && Number.isFinite(r.qty) && r.qty > 0);
 
 		let processedAssets = [];
 		const locations = getLocationKeysCached();
